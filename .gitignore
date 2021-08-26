@@ -59,3 +59,4 @@ package-lock.json
 .cpcache
 resources/brepl_client.js
 .shadow-cljs
+*.clojars-token

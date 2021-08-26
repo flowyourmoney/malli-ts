@@ -1,16 +1,14 @@
-;; shadow-cljs configuration
-{
- :source-paths
+{:source-paths
  ["development"
-  "src"]
+  "src"
+  "tests"]
 
  :dependencies
  [[metosin/malli "0.5.0"]
   [camel-snake-kebab "0.4.2"]]
 
  :builds
- {:dev {:closure-defines {malli.registry/type "custom"}
-        :target :node-library
+ {:dev {:target :node-library
         :output-to "out/dev.js"
         :exports {}}}}
 
