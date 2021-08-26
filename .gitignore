@@ -1,3 +1,9 @@
+# Custom
+
+out/
+
+# clojure
+
 pom.xml
 pom.xml.asc
 *.jar
@@ -12,3 +18,44 @@ pom.xml.asc
 .lein-failures
 .nrepl-port
 .cpcache/
+
+# clojurescript
+
+*~
+.idea
+/.DS_Store
+.DS_Store
+/classes
+/lib
+/target
+closure
+/core.js
+/coreadvanced.js
+/coresimple.js
+/out
+*out
+.lein*
+/pom.xml
+*.iml
+.repl*
+*.swp
+*.zip
+clojurescript_release_*
+closure-release-*
+.lein-repl-history
+.nrepl-port
+.nrepl-repl-history
+builds
+.cljs*
+node_modules
+nashorn_code_cache
+src/main/cljs/cljs/core.aot.js
+src/main/cljs/cljs/core.aot.js.map
+src/main/cljs/cljs/core.cljs.cache.aot.edn
+src/main/cljs/cljs/core.cljs.cache.aot.json
+.node_repl
+package.json
+package-lock.json
+.cpcache
+resources/brepl_client.js
+.shadow-cljs
