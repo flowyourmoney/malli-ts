@@ -1,37 +1,45 @@
 (ns malli-ts.dev.experiments.exp1
-  (:require [malli.core :as m]
-            [malli.registry :as mr]))
+  (:require [malli-ts.core :refer [parse-files]]
+            [malli.core :as m]))
 
-(defonce registry-db*
-  (atom (merge (m/default-schemas)
-               {:number (m/-simple-schema
-                         {:type :number
-                          :pred number?
-                          :property-pred (m/-min-max-pred nil)})
-                :string (m/-simple-schema
-                         {:type :string
-                          :pred string?})})))
+(comment
+  (parse-files
+   {"flow/index.d.ts" [[:flow/person {:t-name "FlowPerson" :export true}]]}
 
-(mr/set-default-registry!
- (mr/mutable-registry registry-db*))
+   {:export-default true
+    :files-import-alias {"flow/index.d.ts" "flow"}
+    :registry {:flow/person (m/schema [:map [:name string?] [:age pos-int?]])}})
 
-(defn register-schema!
-  [schema-id schema]
-  (swap! registry-db* assoc schema-id schema))
+  (let [file->content
+        (parse-files
+         {"flow/index.d.ts" [[:flow/person {:t-name "FlowPerson"}]
+                             [:account {:t-name "Account"}]]
+          "flow/company/index.d.ts" [[:flow/address {:t-name "FlowAddress"}]
+                                     [:flow/company {:t-name "FlowCompany"}]]}
+         {:export-default true
+          :default-to-camel-case true
+          :files-import-alias {"flow/index.d.ts" "flow"
+                               "flow/company/index.d.ts" "fCompany"}
+          :registry
+          (let [registry* (atom (m/default-schemas))
+                update-registry!
+                (fn [schema-id schema]
+                  (swap! registry* assoc schema-id
+                         (m/schema schema {:registry @registry*})))]
+            (update-registry! :flow/person [:map [:name :string] [:age :int]])
+            (update-registry! :flow/address string?)
 
-(register-schema! :neg-number [:and number? neg?])
+            (update-registry! :flow/company [:map
+                                             [:name :string]
+                                             [:people [:set :flow/person]]
+                                             [:stuff [:set any?]]
+                                             [:address :flow/address]])
 
-(comment (m/validate :neg-number -1))
-
-(register-schema!
- :flow/person
- [:map [:name :string] [:account-balance :neg-number]])
-
-(comment (m/validate :flow/person {:name "Tiago" :account-balance -100}))
-
-(register-schema! :flow/family [:vector :flow/person])
-
-(comment (m/validate :flow/family [{:name "Tiago" :account-balance -100}
-                                   {:name "Danny" :account-balance -200}
-                                   {:name "Niels" :account-balance -300}]))
+            (update-registry! :account [:map [:balance float?] [:asdf-asdf any?]])
+            @registry*)})]
+    
+    (doseq [[file content] file->content]
+      (println
+       (str "-- "file " --" \newline
+            content \newline)))))
 

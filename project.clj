@@ -6,7 +6,7 @@
             :url "http://www.opensource.org/licenses/mit-license.php"}
 
   :dependencies
-  [[metosin/malli "0.5.0"]
+  [[metosin/malli "0.6.1"]
    [camel-snake-kebab "0.4.2"]]
 
   :source-paths

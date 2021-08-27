@@ -1,6 +1,6 @@
 (ns malli-ts.tests.transform
-  (:require [cljs.test :refer-macros [deftest is testing run-tests]]
-            [malli-ts.transform :refer [transform]]
+  (:require [cljs.test :refer-macros [deftest is run-tests testing]]
+            [malli-ts.ast :refer [transform]]
             [malli.core :as m]))
 
 (deftest number
