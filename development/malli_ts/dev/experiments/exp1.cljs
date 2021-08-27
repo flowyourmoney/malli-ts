@@ -8,8 +8,9 @@
 
    {:export-default true
     :files-import-alias {"flow/index.d.ts" "flow"}
-    :registry {:flow/person (m/schema [:map [:name string?] [:age pos-int?]])}})
+    :registry {:flow/person (m/schema [:map [:name string?] [:age pos-int?]])}}))
 
+(comment
   (let [file->content
         (parse-files
          {"flow/index.d.ts" [[:flow/person {:t-name "FlowPerson"}]
@@ -40,6 +41,7 @@
     
     (doseq [[file content] file->content]
       (println
+
        (str "-- "file " --" \newline
             content \newline)))))
 
