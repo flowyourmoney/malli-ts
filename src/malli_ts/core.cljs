@@ -1,5 +1,5 @@
 (ns malli-ts.core
-  (:require [malli-ts.parse :refer [parse-ast]]
+  (:require [malli-ts.ast :refer [parse-ast]]
             [malli.core :as m]
             [camel-snake-kebab.core :as csk]
             [clojure.string :as string]
