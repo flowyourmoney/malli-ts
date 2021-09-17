@@ -14,7 +14,9 @@
           (-ref ref))
       result)))
 
-(defmulti parse-schema-node (fn [name _schema _children _options] name) :default ::default)
+(defmulti parse-schema-node
+  (fn [name _schema _children _options] name)
+  :default ::default)
 
 (defmethod parse-schema-node ::default [_ _ _ _] {})
 (defmethod parse-schema-node 'any? [_ _ _ _] {})
@@ -112,8 +114,16 @@
 (defmethod parse-schema-node :symbol [_ _ _ _] {:type :string})
 (defmethod parse-schema-node :qualified-symbol [_ _ _ _] {:type :string})
 (defmethod parse-schema-node :uuid [_ _ _ _] {:type :string})
-(defmethod parse-schema-node :=> [_ _ _ _] {})
-(defmethod parse-schema-node :function [_ _ _ _] {})
+
+(defmethod parse-schema-node :cat [_ _ children _]
+  {:type :cat :items children})
+
+(defmethod parse-schema-node :=> [_ _ [args ret] _]
+  {:type :=> :args args :ret ret})
+
+(defmethod parse-schema-node :function [_ _ children _]
+  {:type :function :items children})
+
 (defmethod parse-schema-node :ref [_ schema _ _] (-ref (m/-ref schema)))
 (defmethod parse-schema-node :schema [_ schema _ options] (-schema schema options))
 (defmethod parse-schema-node ::m/schema [_ schema _ options] (-schema schema options))
@@ -143,13 +153,18 @@
      (cond-> (-parse ?schema options) (seq @definitions) (assoc :definitions @definitions)))))
 
 (comment
-  (parse-ast
-   [:schema
-    {:registry {:flow/poop [:map [:poop [:= "yes"]]]}}
-    [:map
-     [:a :int]
-     [:b {:optional true} float?]
-     [:c :string]
-     [:d :boolean]
-     [:e :flow/poop]]]))
+  (-> (parse-ast
+       [:schema
+        {:registry {:flow/poop [:map [:poop [:= "yes"]]]}}
+        [:map
+         [:a :int]
+         [:b {:optional true} float?]
+         [:c :string]
+         [:d :boolean]
+         [:e :flow/poop]
+         [:f [:=> [:cat :int :string] :string]]
+         [:g [:function
+              [:=> [:cat :int] :int]
+              [:=> [:cat :int :string] :string]]]]])
+      prn))
 
