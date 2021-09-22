@@ -1,8 +1,9 @@
 (ns malli-ts.core
-  (:require [malli-ts.ast :refer [parse-ast]]
+  (:require [malli-ts.ast :refer [->ast]]
             [malli.core :as m]
             [camel-snake-kebab.core :as csk]
             [clojure.string :as string]
+            [clojure.set :as set]
             ["path" :as path]))
 
 (defn- -dispatch-parse-ast-node
@@ -33,13 +34,13 @@
           ref-type-name (get-in schema-id->type-desc [$ref :t-name])
           same-file? (= file ref-file)]
       (when-not same-file? 
-        (swap! file-imports* update file clojure.set/union #{ref-file}))
+        (swap! file-imports* update file set/union #{ref-file}))
       (str (if-not same-file? (str import-alias ".")) ref-type-name))))
 
 (comment
   (-parse-ast-node
    {:$ref :flow/person
-    (:definitions) {:flow/person (transform [:tuple :string :int])}}
+    (:definitions) {:flow/person (parse-ast [:tuple :string :int])}}
    {:deref-types {:flow/person false}
     :schema-id->type-desc
     {:flow/person {:t-name "FlowPerson"
@@ -48,7 +49,7 @@
   
   (-parse-ast-node
    {:$ref :flow/person
-    :definitions {:flow/person (transform [:tuple :string :int])}}
+    :definitions {:flow/person (parse-ast [:tuple :string :int])}}
    {:deref-types {:flow/person true}
     :schema-id->type-desc
     {:flow/person {:t-name "FlowPerson"
@@ -76,7 +77,7 @@
 (defmethod -parse-ast-node [:type :tuple] [{:keys [items]} options]
   (str "[" (string/join "," (map #(-parse-ast-node % options) items)) "]"))
 
-(comment (-parse-ast-node (transform [:tuple :int :string :boolean])))
+(comment (-parse-ast-node (parse-ast [:tuple :int :string :boolean])))
 
 (defmethod -parse-ast-node :union [{items :union} options]
   (str "(" (string/join "|" (map #(-parse-ast-node % options) items)) ")"))
@@ -85,12 +86,12 @@
   (str "(" (string/join "&" (map #(-parse-ast-node % options) items)) ")"))
 
 (comment
-  (-parse-ast-node (transform [:enum 1 :something false]))
-  (-parse-ast-node (transform [:maybe :string]))
-  (-parse-ast-node (transform [:or :string :int]))
-  (-parse-ast-node (transform [:orn [:t-name :string] [:age :int]]))
+  (-parse-ast-node (parse-ast [:enum 1 :something false]))
+  (-parse-ast-node (parse-ast [:maybe :string]))
+  (-parse-ast-node (parse-ast [:or :string :int]))
+  (-parse-ast-node (parse-ast [:orn [:t-name :string] [:age :int]]))
   ;; I know this doesn't make sense
-  (-parse-ast-node (transform [:and :string :boolean])))
+  (-parse-ast-node (parse-ast [:and :string :boolean])))
 
 (defmethod -parse-ast-node [:type :object] [{:keys [properties
                                                     optional
@@ -116,15 +117,49 @@
          "}")))
 
 (comment
-  (-parse-ast-node (transform [:map [:a :int] [:b :string]]))
-  (-parse-ast-node (transform [:map-of :string :int]))
+  (-parse-ast-node (parse-ast [:map [:a :int] [:b :string]]))
+  (-parse-ast-node (parse-ast [:map-of :string :int]))
   (-parse-ast-node
    {:$ref :flow/person
-    :definitions {:flow/person (transform [:map [:t-name string?] [:age pos-int?]])}}
+    :definitions {:flow/person (parse-ast [:map [:t-name string?] [:age pos-int?]])}}
    {:deref-types {:flow/person true}
     :schema-id->type-desc {:flow/person {:t-name "FlowPerson"
                                          :file "flow/person/index.d.ts"}}
     :files-import-alias {"flow/person/index.d.ts" "fp"}}))
+
+(defn- letter-args
+  ([letter-arg]
+   (if letter-arg
+     (let [letter-count (.substring letter-arg 1)
+           next-count (if-not (empty? letter-count)
+                        (-> letter-count js/Number inc)
+                        1)
+           char-code (.charCodeAt letter-arg 0)      
+           z? (= char-code 122)
+           next-letter (if-not z?
+                         (.fromCharCode js/String (inc char-code))
+                         "a")
+           next-letter-arg (str next-letter (if z? next-count letter-count))]
+       (cons next-letter-arg
+             (lazy-seq (letter-args next-letter-arg))))
+     (cons "a" (lazy-seq (letter-args "a")))))
+  ([] (letter-args nil)))
+
+(comment (take 5 (letter-args)))
+
+(defmethod -parse-ast-node [:type :=>] [{:keys [args ret]}
+                                        {:keys [args-names]
+                                         :as options}]
+  (let [args-names (if args-names args-names (take (count args) (letter-args)))]
+    (str "function ("
+         (string/join ", " (map (fn [arg-name arg]
+                                  (str arg-name ":" (-parse-ast-node arg options)))
+                                args-names args))
+         "): " (-parse-ast-node ret options))))
+
+(comment
+  (-parse-ast-node
+   (->ast [:=> [:cat :string :int] [:map [:a :int] [:b :string]]])))
 
 (defn import-literal
   [from alias]
@@ -159,13 +194,14 @@
         (reduce
          (fn [m [file schema-type-vs]]
            (reduce
-            (fn [m [schema-id {:keys [t-name]}]]
+            (fn [m [schema-id {:keys [t-name] :as t-options}]]
               (assoc-in
                m [schema-id :literal] 
-               (-parse-ast-node (parse-ast schema-id options)
+               (-parse-ast-node (->ast schema-id options)
                                 (merge options
                                        {:deref-types {schema-id true}
-                                        :file file}))))
+                                        :file file
+                                        :t-options t-options}))))
             m schema-type-vs))
          schema-id->type-desc file->schema-type-vs)
 

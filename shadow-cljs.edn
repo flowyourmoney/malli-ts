@@ -10,7 +10,12 @@
  :builds
  {:dev {:target :node-library
         :output-to "out/dev.js"
-        :exports {}}}}
+        :exports {}}
+  :test {:target :node-test
+         :output-to "out/test.js"
+         :ns-regexp "tests\\."
+         :test-dir "tests"
+         :autorun true}}}
 
 ;; (do (shadow/watch :dev) (shadow/repl :dev))
 

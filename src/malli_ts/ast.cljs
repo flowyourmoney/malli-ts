@@ -119,7 +119,7 @@
   {:type :cat :items children})
 
 (defmethod parse-schema-node :=> [_ _ [args ret] _]
-  {:type :=> :args args :ret ret})
+  {:type :=> :args (get args :items) :ret ret})
 
 (defmethod parse-schema-node :function [_ _ children _]
   {:type :function :items children})
@@ -144,16 +144,16 @@
 
 (defn- -parse [?schema options] (m/walk ?schema -ts-schema-walker options))
 
-(defn parse-ast
+(defn ->ast
   ([?schema]
-   (parse-ast ?schema nil))
+   (->ast ?schema nil))
   ([?schema options]
    (let [definitions (atom {})
          options (merge options {::m/walk-entry-vals true, ::definitions definitions, ::transform -parse})]
      (cond-> (-parse ?schema options) (seq @definitions) (assoc :definitions @definitions)))))
 
 (comment
-  (-> (parse-ast
+  (-> (->ast
        [:schema
         {:registry {:flow/poop [:map [:poop [:= "yes"]]]}}
         [:map
