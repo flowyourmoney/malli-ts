@@ -7,12 +7,18 @@
 (deftest parse-functions
   (is (= (-parse-ast-node
           (->ast [:=> [:cat :string :int] [:map [:a :int] [:b :string]]]))
-         "function (a:string, b:number): {\"a\":number,\"b\":string}"))
+         "(a:string, b:number) => {\"a\":number,\"b\":string}"))
   (is (= (-parse-ast-node
           (->ast [:=> [:cat :string :int] [:map [:a :int] [:b :string]]])
           {:args-names ["name" "age"]})
-         "function (name:string, age:number): {\"a\":number,\"b\":string}")))
-
+         "(name:string, age:number) => {\"a\":number,\"b\":string}"))
+  (is (= (-parse-ast-node
+          (->ast [:=> [:catn [:name :string] [:age :int] [:account-number string?]]
+                  [:map [:a :int] [:b :string]]]))
+         "(name:string, age:number, accountNumber:string) => {\"a\":number,\"b\":string}"))
+  (is (= (-parse-ast-node
+          (->ast [:=> [:cat] any?]))
+         "() => any")))
 
 (testing "ast parsing"
   (parse-functions))

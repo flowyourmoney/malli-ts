@@ -150,12 +150,21 @@
 (defmethod -parse-ast-node [:type :=>] [{:keys [args ret]}
                                         {:keys [args-names]
                                          :as options}]
-  (let [args-names (if args-names args-names (take (count args) (letter-args)))]
-    (str "function ("
+  (let [args-type (get args :type)
+        args-items (get args :items)
+        args-names (cond
+                     args-names args-names
+                     (= args-type :catn) (map (fn [[n]] (csk/->camelCaseString n))
+                                              args-items)
+                     :else (take (count args) (letter-args)))
+        args (if (= args-type :catn)
+               (map (fn [[_ a]] a) args-items)
+               args-items)]
+    (str "("
          (string/join ", " (map (fn [arg-name arg]
                                   (str arg-name ":" (-parse-ast-node arg options)))
                                 args-names args))
-         "): " (-parse-ast-node ret options))))
+         ") => " (-parse-ast-node ret options))))
 
 (comment
   (-parse-ast-node
@@ -171,10 +180,33 @@
    "flow"))
 
 (defn ->type-declaration-str
-  [type-name literal options]
-  (let [{:keys [export]} options]
-    (str (if export "export " nil)
-         "type "  type-name " = " literal ";")))
+  [type-name literal jsdoc-literal options]
+  (let [{:keys [export declare]} options]
+    (str (if jsdoc-literal (str jsdoc-literal \newline))
+         (if export "export ")
+         (if declare "var " "type ")
+         type-name (if declare ": " " = ") literal ";")))
+
+(defn -dispatch-provide-jsdoc [jsdoc-k _ _] jsdoc-k)
+
+(defmulti provide-jsdoc #'-dispatch-provide-jsdoc)
+
+(defmethod provide-jsdoc ::schema
+  [jsdoc-k schema-id t-options options]
+  ["schema" (-> schema-id (m/deref options) m/form str)])
+
+(defn -jsdoc-literal
+  [jsdoc-pairs]
+  (if-not (empty? jsdoc-pairs)
+    (str "/**\n"
+         (->> jsdoc-pairs
+              (map (fn [[attribute value]] (str " * @" attribute " " value)))
+              (string/join "\n"))
+         "\n */")))
+
+(comment
+  (println (-jsdoc-literal [["schema" (str '[:map-of any?])]
+                            ["author" "Mr. Poopybutthole"]])))
 
 (defn parse-files
   [file->schema-type-vs options]
@@ -190,18 +222,25 @@
         options (merge options {:schema-id->type-desc schema-id->type-desc
                                 :file-imports* (atom {})})
 
+        jsdoc-default (get options :jsdoc-default)
+
         schema-id->type-desc ;; assocs literal into type-desc
         (reduce
          (fn [m [file schema-type-vs]]
            (reduce
-            (fn [m [schema-id {:keys [t-name] :as t-options}]]
-              (assoc-in
-               m [schema-id :literal] 
-               (-parse-ast-node (->ast schema-id options)
-                                (merge options
-                                       {:deref-types {schema-id true}
-                                        :file file
-                                        :t-options t-options}))))
+            (fn [m [schema-id {:keys [t-name jsdoc] :as t-options}]]
+              (let [literal (-parse-ast-node (->ast schema-id options)
+                                             (merge options
+                                                    {:deref-types {schema-id true}
+                                                     :file file
+                                                     :t-options t-options}))
+                    jsdoc-literal
+                    (->> (concat jsdoc-default jsdoc)
+                         (map #(provide-jsdoc % schema-id t-options options))
+                         -jsdoc-literal)]
+                (-> m
+                    (assoc-in [schema-id :literal] literal)
+                    (assoc-in [schema-id :jsdoc-literal] jsdoc-literal))))
             m schema-type-vs))
          schema-id->type-desc file->schema-type-vs)
 
@@ -229,10 +268,12 @@
             m file
             (map
              (fn [[schema-id _]]
-               (let [{:keys [t-name literal export]} (get schema-id->type-desc schema-id)]
+               (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
+                     (get schema-id->type-desc schema-id)]
                  (->type-declaration-str
-                  t-name literal
-                  {:export (if (some? export) export export-default)})))
+                  t-name literal jsdoc-literal
+                  (merge t-options
+                         {:export (if (some? export) export export-default)}))))
              scheva-type-vs)))
          {} file->schema-type-vs)
 

@@ -115,11 +115,14 @@
 (defmethod parse-schema-node :qualified-symbol [_ _ _ _] {:type :string})
 (defmethod parse-schema-node :uuid [_ _ _ _] {:type :string})
 
+(defmethod parse-schema-node :catn [_ _ children _]
+  {:type :catn :items (map (fn [[n _ type]] [n type]) children)})
+
 (defmethod parse-schema-node :cat [_ _ children _]
   {:type :cat :items children})
 
 (defmethod parse-schema-node :=> [_ _ [args ret] _]
-  {:type :=> :args (get args :items) :ret ret})
+  {:type :=> :args args :ret ret})
 
 (defmethod parse-schema-node :function [_ _ children _]
   {:type :function :items children})
@@ -168,3 +171,4 @@
               [:=> [:cat :int :string] :string]]]]])
       prn))
 
+(comment (->ast [:catn [:a :string] [:b number?]]))

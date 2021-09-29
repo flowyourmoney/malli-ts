@@ -1,14 +1,25 @@
 (ns malli-ts.dev.experiments.exp1
-  (:require [malli-ts.core :refer [parse-files]]
+  (:require [malli-ts.core :refer [parse-files] :as mt]
             [malli.core :as m]))
 
-(comment
-  (parse-files
-   {"flow/index.d.ts" [[:flow/person {:t-name "FlowPerson" :export true}]]}
+(defn print-files
+  [file->content]
+  (doseq [[file content] file->content]
+    (println
 
-   {:export-default true
-    :files-import-alias {"flow/index.d.ts" "flow"}
-    :registry {:flow/person (m/schema [:map [:name string?] [:age pos-int?]])}}))
+     (str "-- "file " --" \newline
+          content \newline))))
+
+(comment
+  (-> (parse-files
+       {"flow/index.d.ts" [[:flow/person {:t-name "FlowPerson"
+                                          :export true
+                                          :jsdoc [::mt/schema]}]]}
+
+       {:export-default true
+        :files-import-alias {"flow/index.d.ts" "flow"}
+        :registry {:flow/person (m/schema [:map [:name string?] [:age pos-int?]])}})
+      print-files))
 
 (comment
   (let [file->content
@@ -21,6 +32,7 @@
           :default-to-camel-case true
           :files-import-alias {"flow/index.d.ts" "flow"
                                "flow/company/index.d.ts" "fCompany"}
+          :jsdoc-default [::mt/schema]
           :registry
           (let [registry* (atom (m/default-schemas))
                 update-registry!
@@ -38,10 +50,5 @@
 
             (update-registry! :account [:map [:balance float?] [:asdf-asdf any?]])
             @registry*)})]
-    
-    (doseq [[file content] file->content]
-      (println
-
-       (str "-- "file " --" \newline
-            content \newline)))))
+    (print-files file->content)))
 

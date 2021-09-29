@@ -1,21 +1,33 @@
-{:source-paths
- ["development"
-  "src"
-  "tests"]
+{:source-paths ["src" "development" "tests"]
 
  :dependencies
  [[metosin/malli "0.5.0"]
-  [camel-snake-kebab "0.4.2"]]
+  [camel-snake-kebab "0.4.2"]
+  [cljs-bean "1.7.0"]]
 
  :builds
- {:dev {:target :node-library
-        :output-to "out/dev.js"
-        :exports {}}
-  :test {:target :node-test
-         :output-to "out/test.js"
-         :ns-regexp "tests\\."
-         :test-dir "tests"
-         :autorun true}}}
+ {:dev
+  {:target :node-library
+   :output-to "out/dev.js"
+   :exports {}}
+  
+  :test
+  {:target :node-test
+   :output-to "out/test.js"
+   :ns-regexp "tests\\."
+   :test-dir "tests"
+   :autorun true}
+  
+  :malli-ts.ts
+  {:target :node-library
+   :output-to "node_modules/malli-ts.ts.js"
+   :exports-fn malli-ts.ts/exports-fn}
+
+  :malli-ts.ts_gen-types
+  {:target :node-script
+   :output-to "out/malli-ts.ts_gen-types.js"
+   :main malli-ts.ts/gen-types
+   :autorun true}}}
 
 ;; (do (shadow/watch :dev) (shadow/repl :dev))
 
