@@ -1,6 +1,6 @@
-(defproject org.clojars.tiagodalloca/malli-ts "0.1.0-SNAPSHOT"
+(defproject org.clojars.flowyourmoney "0.1.0-SNAPSHOT"
   :description "A library for generating TS type definitions from malli schemas"
-  :url "https://tiagodalloca.github.io"
+  :url "https://flowyour.money/"
 
   :license {:name "MIT"
             :url "http://www.opensource.org/licenses/mit-license.php"}
