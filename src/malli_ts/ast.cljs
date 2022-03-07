@@ -8,8 +8,10 @@
 (defn -ref [x] {:$ref x})
 
 (defn -schema [schema {::keys [transform definitions] :as options}]
-  (let [result (transform (m/deref schema) options)]
-    (if-let [ref (m/-ref schema)]
+  (let [derefed (m/deref schema)
+        result (merge (transform derefed options) {:schema derefed})
+        ref (m/-ref schema)]
+    (if ref
       (do (swap! definitions assoc ref result)
           (-ref ref))
       result)))
@@ -141,9 +143,10 @@
   (transform (m/deref schema) options))
 
 (defn- -ts-schema-walker [schema _ children options]
-  (if (satisfies? TsSchema schema)
-    (-parse-schema-node schema children options)
-    (parse-schema-node (m/type schema) schema children options)))
+  (merge (if (satisfies? TsSchema schema)
+           (-parse-schema-node schema children options)
+           (parse-schema-node (m/type schema) schema children options))
+         {:schema schema}))
 
 (defn- -parse [?schema options] (m/walk ?schema -ts-schema-walker options))
 
@@ -172,3 +175,8 @@
       prn))
 
 (comment (->ast [:catn [:a :string] [:b number?]]))
+
+(comment
+  (-> (->ast [:schema
+              {:registry {:external-type any?}}         
+              [:external-type {:external-type {:t-name "type-name" :t-path "type-path"}}]])))

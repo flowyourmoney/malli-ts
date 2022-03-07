@@ -9,6 +9,7 @@
 (defn- -dispatch-parse-ast-node
   [node options]
   (cond
+    (-> node :schema (m/properties options) :external-type) :external-type
     (not (some? node)) :nil-node
     (:$ref node) :$ref
     (:type node) [:type (:type node)]
@@ -23,14 +24,17 @@
 (defmethod -parse-ast-node :$ref
   [{:keys [$ref] :as node} {:keys [deref-types
                                    schema-id->type-desc
-                                   files-import-alias
+                                   files-import-alias*
                                    file-imports*
                                    file]
                             :as options}]
-  (if (get deref-types $ref)
-    (-parse-ast-node (get-in node [:definitions $ref]) options)
+  (if (or (get deref-types $ref) (not (get schema-id->type-desc $ref)))
+    (-parse-ast-node
+     (or (get-in node [:definitions $ref])
+         (->ast (:schema node)))
+     options)
     (let [ref-file (get-in schema-id->type-desc [$ref :file])
-          import-alias (get files-import-alias ref-file)
+          import-alias (get @files-import-alias* ref-file)
           ref-type-name (get-in schema-id->type-desc [$ref :t-name])
           same-file? (= file ref-file)]
       (when-not same-file? 
@@ -45,7 +49,7 @@
     :schema-id->type-desc
     {:flow/person {:t-name "FlowPerson"
                    :file "flow/person/index.d.ts"}}
-    :files-import-alias {"flow/person/index.d.ts" "fp"}})
+    :files-import-alias* (atom {"flow/person/index.d.ts" "fp"})})
   
   (-parse-ast-node
    {:$ref :flow/person
@@ -54,7 +58,7 @@
     :schema-id->type-desc
     {:flow/person {:t-name "FlowPerson"
                    :file "flow/person/index.d.ts"}}
-    :files-import-alias {"flow/person/index.d.ts" "fp"}}))
+    :files-import-alias* (atom {"flow/person/index.d.ts" "fp"})}))
 
 (defmethod -parse-ast-node [:type :number] [_ _] "number")
 (defmethod -parse-ast-node [:type :string] [_ _] "string")
@@ -110,11 +114,31 @@
                                                            (name k))]
                                        (str \" property-name \"
                                             (if (get optional k) "?") ":"
-                                            (-parse-ast-node v options))))
+                                            (do
+                                              (-parse-ast-node v options)))))
                                    properties)))]
     (str "{" (string/join "," (filter (comp not string/blank?)
                                       [idx-sign-literal properties-literal]))
          "}")))
+
+(defmethod -parse-ast-node :external-type [{:keys [schema]}
+                                           {:keys [file
+                                                   files-import-alias*
+                                                   file-imports*]
+                                            :as options}]
+  (let [{:keys [t-name t-path t-alias]} (:external-type (m/properties schema))
+        is-imported-already (@file-imports* t-path)
+        canonical-alias (get @files-import-alias* t-path)
+        import-alias (if canonical-alias
+                       canonical-alias
+                       (if t-alias
+                         t-alias
+                         (csk/->camelCase (string/join "-" (take-last 2 (string/split t-path "/"))))))]
+    (when-not is-imported-already
+      (swap! file-imports* update file set/union #{t-path}))
+    (when-not canonical-alias
+      (swap! files-import-alias* assoc t-path import-alias))
+    (str import-alias "." t-name)))
 
 (comment
   (-parse-ast-node (parse-ast [:map [:a :int] [:b :string]]))
@@ -125,7 +149,7 @@
    {:deref-types {:flow/person true}
     :schema-id->type-desc {:flow/person {:t-name "FlowPerson"
                                          :file "flow/person/index.d.ts"}}
-    :files-import-alias {"flow/person/index.d.ts" "fp"}}))
+    :files-import-alias* (atom {"flow/person/index.d.ts" "fp"})}))
 
 (defn- letter-args
   ([letter-arg]
@@ -220,7 +244,8 @@
          {} file->schema-type-vs)
 
         options (merge options {:schema-id->type-desc schema-id->type-desc
-                                :file-imports* (atom {})})
+                                :file-imports* (atom {})
+                                :files-import-alias* (atom {})})
 
         jsdoc-default (get options :jsdoc-default)
 
@@ -244,7 +269,7 @@
             m schema-type-vs))
          schema-id->type-desc file->schema-type-vs)
 
-        {:keys [export-default files-import-alias file-imports*]} options        
+        {:keys [export-default files-import-alias* file-imports*]} options        
 
         files (map (fn [[k _]] k) file->schema-type-vs)
 
@@ -257,7 +282,7 @@
              (fn [import-file]
                (import-literal
                 (path/relative (path/dirname file) import-file)
-                (get files-import-alias import-file)))
+                (get @files-import-alias* import-file)))
              (get @file-imports* file))))
          {} files)
 
