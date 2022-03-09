@@ -9,7 +9,7 @@
 (defn- -dispatch-parse-ast-node
   [node options]
   (cond
-    (-> node :schema (m/properties options) :external-type) :external-type
+    (-> node :schema (m/properties options) ::external-type) :external-type
     (not (some? node)) :nil-node
     (:$ref node) :$ref
     (:type node) [:type (:type node)]
@@ -126,19 +126,19 @@
                                                    files-import-alias*
                                                    file-imports*]
                                             :as options}]
-  (let [{:keys [t-name t-path t-alias]} (:external-type (m/properties schema))
-        is-imported-already (@file-imports* t-path)
-        canonical-alias (get @files-import-alias* t-path)
-        import-alias (if canonical-alias
+  (let [{:keys [t-name t-path t-alias]} (::external-type (m/properties schema))
+        is-imported-already (if t-path (@file-imports* t-path))
+        canonical-alias (if t-path (get @files-import-alias* t-path))
+        import-alias (if (or canonical-alias (not t-path))
                        canonical-alias
                        (if t-alias
                          t-alias
                          (csk/->camelCase (string/join "-" (take-last 2 (string/split t-path "/"))))))]
-    (when-not is-imported-already
+    (when (and t-path (not is-imported-already))
       (swap! file-imports* update file set/union #{t-path}))
-    (when-not canonical-alias
+    (when (and t-path (not canonical-alias))
       (swap! files-import-alias* assoc t-path import-alias))
-    (str import-alias "." t-name)))
+    (str (if t-path (str import-alias ".")) t-name)))
 
 (comment
   (-parse-ast-node (parse-ast [:map [:a :int] [:b :string]]))
@@ -243,9 +243,15 @@
                      {} schema-type-vs)))
          {} file->schema-type-vs)
 
+        {:keys [registry use-default-schemas]
+         :or {registry {} use-default-schemas true}} options
+
         options (merge options {:schema-id->type-desc schema-id->type-desc
                                 :file-imports* (atom {})
-                                :files-import-alias* (atom {})})
+                                :files-import-alias* (atom {})
+                                :registry (if use-default-schemas
+                                            (merge registry (m/default-schemas))
+                                            registry)})
 
         jsdoc-default (get options :jsdoc-default)
 
@@ -314,3 +320,12 @@
                 {} files)]
     file-contents))
 
+(defn external-type
+  ([type-name type-path type-import-alias]
+   [any? {::external-type {:t-name type-name
+                           :t-path type-path
+                           :t-alias type-import-alias}}])
+  ([type-name type-path]
+   (external-type type-name type-path nil))
+  ([type-name]
+   (external-type type-name nil nil)))

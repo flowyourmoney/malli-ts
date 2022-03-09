@@ -176,7 +176,3 @@
 
 (comment (->ast [:catn [:a :string] [:b number?]]))
 
-(comment
-  (-> (->ast [:schema
-              {:registry {:external-type any?}}         
-              [:external-type {:external-type {:t-name "type-name" :t-path "type-path"}}]])))

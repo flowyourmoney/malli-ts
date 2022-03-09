@@ -20,6 +20,16 @@
   [& args]
   (apply m/validate (map b/->clj args)))
 
+(defn now [] (js/Date.))
+
+(defn toSha256 [s]
+  (-> (js/require "crypto")
+      (.createHash "sha256")
+      (.update s)))
+
+(comment
+  (-> "hello world" toSha256 (.digest "hex")))
+
 (defn exports-fn
   []
   (comment
@@ -41,13 +51,22 @@
              {"malli-ts.ts.d.ts" [[:k {:t-name "k" :declare true}]
                                   [:sym {:t-name "sym" :declare true}]
                                   [:toClj {:t-name "toClj" :declare true}]
-                                  [:validate {:t-name "validate" :declare true}]]}
+                                  [:validate {:t-name "validate" :declare true}]
+                                  [:now {:t-name "now" :declare true}]
+                                  [:toSha256 {:t-name "toSha256" :declare true}]]}
              {:export-default true
               :jsdoc-default [::mt/schema]
+              :use-default-registry true
               :registry
-              {:k (m/schema [:=> [:catn [:s string?]] any?])
-               :sym (m/schema [:=> [:catn [:s string?]] any?])
-               :toClj (m/schema [:=> [:catn [:o any?]] any?])
-               :validate (m/schema [:=> [:catn [:schema any?] [:val any?]] any?])}})
+              {:k [:=> [:catn [:s string?]] any?]
+               :sym [:=> [:catn [:s string?]] any?]
+               :toClj [:=> [:catn [:o any?]] any?]
+               :validate [:=> [:catn [:schema any?] [:val any?]] any?]
+
+               :date (mt/external-type "Date")
+               :now [:=> [:cat] :date]
+
+               :crypto/hash (mt/external-type "Hash" "crypto" "crypto")
+               :toSha256 [:=> [:catn [:s string?]] :crypto/hash]}})
             first)]
-    (.writeFileSync fs "node_modules/malli-ts.ts.d.ts" content)))
+    (.writeFileSync fs "examples/malli-ts.d.ts" content)))

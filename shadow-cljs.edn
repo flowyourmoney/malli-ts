@@ -25,7 +25,7 @@
 
   :malli-ts.ts_gen-types
   {:target :node-script
-   :output-to "out/malli-ts.ts_gen-types.js"
+   :output-to "examples/malli-ts.ts_gen-types.js"
    :main malli-ts.ts/gen-types
    :autorun true}}}
 
