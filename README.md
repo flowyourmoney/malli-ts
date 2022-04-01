@@ -8,7 +8,7 @@ A library for generating TS type definitions from malli schemas
 
 ### Can I get an example?
 
-Sure! Take a look at [`malli-ts.ts`](https://github.com/flowyourmoney/malli-ts/blob/master/src/malli_ts/ts.cljs)
+Sure! Take a look at [`malli-ts.ts`](https://github.com/flowyourmoney/malli-ts/blob/master/src/malli_ts/ts.cljs) and its corresponding `shadow` build [`:malli-ts.ts_gen-types`](https://github.com/flowyourmoney/malli-ts/blob/master/shadow-cljs.edn)
 
 ### I would like to know why (mt/external-type … has 2 "crypto" argument
 
