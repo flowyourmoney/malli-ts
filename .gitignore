@@ -1,6 +1,7 @@
 # Custom
 
 out/
+secrets/
 
 # clojure
 
