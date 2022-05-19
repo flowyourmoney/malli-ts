@@ -2,6 +2,7 @@
 
 out/
 secrets/
+.clj-kondo/
 
 # clojure
 

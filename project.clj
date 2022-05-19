@@ -6,7 +6,8 @@
             :url "http://www.opensource.org/licenses/mit-license.php"}
 
   :dependencies
-  [[metosin/malli "0.8.4"]
+  [[org.clojure/clojure "1.11.1"]
+   [metosin/malli "0.8.4"]
    [camel-snake-kebab "0.4.2"]]
 
   :source-paths
