@@ -21,7 +21,7 @@
 (defn- -dispatch-parse-ast-node
   [node options]
   (cond
-    (-> node :schema (m/properties options) ::external-type) :external-type
+    (some-> node :schema (m/properties options) ::external-type) :external-type
     (not (some? node)) :nil-node
     (:$ref node) :$ref
     (:type node) [:type (:type node)]

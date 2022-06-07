@@ -1,8 +1,10 @@
 # Custom
 
-out/
-secrets/
-.clj-kondo/
+out
+secrets
+.clj-kondo
+.calva
+.lsp
 
 # clojure
 
