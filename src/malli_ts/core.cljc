@@ -98,13 +98,18 @@
                                                            (csk/->camelCase (name k))
                                                            (name k))]
                                        (str \" property-name \"
-                                            (if (get optional k) "?") ":"
+                                            (if (contains? optional k) "?" nil) ":"
                                             (do
                                               (-parse-ast-node v options)))))
                                    properties)))]
     (str "{" (string/join "," (filter (comp not string/blank?)
                                       [idx-sign-literal properties-literal]))
          "}")))
+
+(comment
+  (-parse-ast-node
+   (->ast [:map [:a :int] [:b {:optional true} :string]]) 
+   {}))
 
 (defmethod -parse-ast-node :external-type [{:keys [schema]}
                                            {:keys [file
@@ -172,7 +177,7 @@
 
 (comment
   (-parse-ast-node
-   (->ast [:=> [:cat :string :int] [:map [:a :int] [:b :string]]])))
+   (->ast [:=> [:cat :string :int] [:map [:a :int] [:b :string]]]) {}))
 
 (defn import-literal
   [from alias]

@@ -85,7 +85,8 @@
 (defmethod parse-schema-node ::m/val [_ _ children _] (first children))
 
 (defmethod parse-schema-node :map [_ _ children _]
-  (let [optional (->> children (filter (m/-comp :optional second)) (mapv first))
+  (let [optional-xf (comp (filter (m/-comp :optional second)) (map first))
+        optional (into #{} optional-xf children)
         object {:type :object
                 :properties (apply array-map (mapcat (fn [[k _ s]] [k s]) children))}]
     (if (empty? optional)
