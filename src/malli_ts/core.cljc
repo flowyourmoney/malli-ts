@@ -47,11 +47,11 @@
      options)
     (let [ref-file (get-in schema-id->type-desc [$ref :file])
           import-alias (get @files-import-alias* ref-file)
-          ref-type-name (get-in schema-id->type-desc [$ref :t-name])
+          ref-type-name (get-in schema-id->type-desc [$ref ::t-name])
           same-file? (= file ref-file)]
       (when-not same-file?
         (swap! file-imports* update file set/union #{ref-file}))
-      (str (if-not same-file? (str import-alias ".")) ref-type-name))))
+      (str (if-not same-file? (str import-alias ".") nil) ref-type-name))))
 
 (defmethod -parse-ast-node [:type :number] [_ _] "number")
 (defmethod -parse-ast-node [:type :string] [_ _] "string")
@@ -116,9 +116,9 @@
                                                    files-import-alias*
                                                    file-imports*]
                                             :as options}]
-  (let [{:keys [t-name t-path t-alias]} (::external-type (m/properties schema))
-        is-imported-already (if t-path (@file-imports* t-path))
-        canonical-alias (if t-path (get @files-import-alias* t-path))
+  (let [{:keys [::t-name ::t-path ::t-alias]} (m/properties schema)
+        is-imported-already (if t-path (@file-imports* t-path) nil)
+        canonical-alias (if t-path (get @files-import-alias* t-path) nil)
         import-alias (if (or canonical-alias (not t-path))
                        canonical-alias
                        (if t-alias
@@ -200,6 +200,7 @@
 
 (defmulti provide-jsdoc #'-dispatch-provide-jsdoc)
 
+#_{:clj-kondo/ignore [:unused-binding]}
 (defmethod provide-jsdoc ::schema
   [jsdoc-k schema-id t-options options]
   ["schema" (-> schema-id (m/deref options) m/form str)])
@@ -224,7 +225,14 @@
          (fn [m [file schema-type-vs]]
            (merge m (reduce
                      (fn [m [schema-id type-desc]]
-                       (assoc m schema-id (assoc type-desc :file file)))
+                       (let [schema-type-options
+                             (into {}
+                                   (comp
+                                    (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
+                                    (map (fn [[k v]] [(-> k name keyword) v])))
+                                   (m/properties (m/deref schema-id options)))
+                             type-desc (merge schema-type-options type-desc)]
+                         (assoc m schema-id (assoc type-desc :file file))))
                      {} schema-type-vs)))
          {} file->schema-type-vs)
 
@@ -244,8 +252,9 @@
         (reduce
          (fn [m [file schema-type-vs]]
            (reduce
-            (fn [m [schema-id {:keys [t-name jsdoc] :as t-options}]]
-              (let [literal (-parse-ast-node (->ast schema-id options)
+            (fn [m [schema-id t-options]]
+              (let [{:keys [t-name jsdoc] :as t-options} (merge t-options (get m schema-id))
+                    literal (-parse-ast-node (->ast schema-id options)
                                              (merge options
                                                     {:deref-types {schema-id true}
                                                      :file file
@@ -295,21 +304,22 @@
 
         file-contents
         (reduce (fn [m
-                     file]
+                    file]
                   (assoc-in
                    m [file]
                    (let [import (string/join "\n" (get file->import-literals file))
                          types (string/join "\n" (get file->type-literals file))]
-                     (str (if-not (string/blank? import) (str import "\n\n"))
+                     (str (if-not (string/blank? import) (str import "\n\n") nil)
                           types))))
                 {} files)]
     file-contents))
 
 (defn external-type
   ([type-name type-path type-import-alias]
-   [any? {::external-type {:t-name type-name
-                           :t-path type-path
-                           :t-alias type-import-alias}}])
+   [any? {::external-type true
+          ::t-name type-name
+          ::t-path type-path
+          ::t-alias type-import-alias}])
   ([type-name type-path]
    (external-type type-name type-path nil))
   ([type-name]
