@@ -8,14 +8,24 @@
   (doseq [[file content] file->content]
     (println
 
-     (str "-- "file " --" \newline
+     (str "-- " file " --" \newline
           content \newline))))
 
+(def flow-person-schema
+  (m/schema [:map
+             {::mt/t-name "Person" ::mt/export true ::mt/jsdoc [::mt/schema]}
+             [:name string?] [:age pos-int?]]))
+
+(def flow-office-schema
+  (m/schema
+   [:set
+    {::mt/t-name "Office" ::mt/jsdoc [::mt/schema]}
+    [:schema {:registry {:flow/person flow-person-schema}} :flow/person]]))
+
 (def registry
-  {:flow/person
-   (m/schema [:map
-              {::mt/t-name "FlowPerson" ::mt/export true ::mt/jsdoc [::mt/schema]}
-              [:name string?] [:age pos-int?]])})
+  {:flow/person flow-person-schema
+   :flow/office flow-office-schema
+   :ibanxs/blah (m/schema [:enum {::mt/t-name "Blah"} "blah"])})
 
 (comment
   (-> (parse-files
@@ -24,10 +34,12 @@
         :files-import-alias {"flow/index.d.ts" "flow"}
         :registry registry})
       print-files)
-  
-  (-> (mt/parse-ns-matching-schemas
-       {:registry registry})
+
+  (-> (mt/parse-matching-schemas {:registry registry})
       print-files)
 
-(mu/update-properties
- (m/deref :flow/person {:registry registry}) assoc ::mt/t-name "FlowPersonV2"))
+  (-> (mt/parse-ns-schemas '(flow ibanxs) {:registry registry})
+      print-files)
+
+  (mu/update-properties
+   (m/deref :flow/person {:registry registry}) assoc ::mt/t-name "FlowPersonV2"))
