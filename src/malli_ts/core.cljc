@@ -1,9 +1,11 @@
 (ns malli-ts.core
   (:require [malli-ts.ast :refer [->ast]]
             [malli.core :as m]
+            [malli.registry :as mr]
             [camel-snake-kebab.core :as csk]
             [clojure.string :as string]
             [clojure.set :as set]
+            [clojure.data :refer [diff]]
             #?(:cljs ["path" :as path])))
 
 #?(:clj
@@ -108,7 +110,7 @@
 
 (comment
   (-parse-ast-node
-   (->ast [:map [:a :int] [:b {:optional true} :string]]) 
+   (->ast [:map [:a :int] [:b {:optional true} :string]])
    {}))
 
 (defmethod -parse-ast-node :external-type [{:keys [schema]}
@@ -304,7 +306,7 @@
 
         file-contents
         (reduce (fn [m
-                    file]
+                     file]
                   (assoc-in
                    m [file]
                    (let [import (string/join "\n" (get file->import-literals file))
@@ -313,6 +315,30 @@
                           types))))
                 {} files)]
     file-contents))
+
+(defn parse-ns-matching-schemas
+  {:arglists '([options]
+               [pred options])}
+  ([pred {:keys [registry transform] :as options}]
+   (let [schemas (into []
+                       (comp (filter (fn [[k s]]
+                                       (and (qualified-keyword? k)
+                                            (not= "malli.core" (namespace k))
+                                            (pred k s))))
+                             (map (fn [[k _]] [k {}]))
+                             (map (or transform identity)))
+                       (mr/schemas (mr/composite-registry registry m/default-registry)))
+         parse-files-arg (persistent!
+                          (reduce
+                           (fn [acc [k opts]]
+                             (let [file-name (str (csk/->snake_case (namespace k)) ".d.ts")]
+                               (if-let [asdf (get acc file-name)]
+                                 (assoc! acc file-name (conj asdf [k opts]))
+                                 (assoc! acc file-name [[k opts]]))))
+                           (transient {}) schemas))]
+     (parse-files (doto parse-files-arg prn) options)))
+  ([options]
+   (parse-ns-matching-schemas (constantly true) options)))
 
 (defn external-type
   ([type-name type-path type-import-alias]
