@@ -88,7 +88,8 @@
                                              :as options}]
   (let [idx-sign-literal (if index-signature
                            (str "[k:" (-parse-ast-node (first index-signature) options) "]:"
-                                (-parse-ast-node (second index-signature) options)))
+                                (-parse-ast-node (second index-signature) options))
+                           nil)
         properties-literal (if-not (empty? properties)
                              (string/join
                               ","
@@ -98,9 +99,9 @@
                                                            (name k))]
                                        (str \" property-name \"
                                             (if (contains? optional k) "?" nil) ":"
-                                            (do
-                                              (-parse-ast-node v options)))))
-                                   properties)))]
+                                            (-parse-ast-node v options))))
+                                   properties))
+                             nil)]
     (str "{" (string/join "," (filter (comp not string/blank?)
                                       [idx-sign-literal properties-literal]))
          "}")))
