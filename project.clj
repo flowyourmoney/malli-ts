@@ -16,4 +16,3 @@
   :repositories
   {"clojars" {:url "https://clojars.org/repo"
               :sign-releases false}})
-

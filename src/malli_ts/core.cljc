@@ -335,7 +335,7 @@
                                  (assoc! acc file-name (conj asdf [k opts]))
                                  (assoc! acc file-name [[k opts]]))))
                            (transient {}) schemas))]
-     (parse-files (doto parse-files-arg prn) options)))
+     (parse-files parse-files-arg options)))
   ([options]
    (parse-matching-schemas (constantly true) options))
   ([]
