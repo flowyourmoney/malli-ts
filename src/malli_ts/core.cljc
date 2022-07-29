@@ -48,7 +48,7 @@
      options)
     (let [ref-file (get-in schema-id->type-desc [$ref :file])
           import-alias (get @files-import-alias* ref-file)
-          ref-type-name (get-in schema-id->type-desc [$ref ::t-name])
+          ref-type-name (get-in schema-id->type-desc [$ref :t-name])
           same-file? (= file ref-file)]
       (when-not same-file?
         (swap! file-imports* update file set/union #{ref-file}))
