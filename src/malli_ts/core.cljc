@@ -1,6 +1,7 @@
 (ns malli-ts.core
   (:require [malli-ts.ast :refer [->ast]]
             [malli.core :as m]
+            [malli.registry :as mr]
             [camel-snake-kebab.core :as csk]
             [clojure.string :as string]
             [clojure.set :as set]
@@ -47,18 +48,19 @@
      options)
     (let [ref-file (get-in schema-id->type-desc [$ref :file])
           import-alias (get @files-import-alias* ref-file)
-          ref-type-name (get-in schema-id->type-desc [$ref :t-name])
+          ref-type-name (or (get-in schema-id->type-desc [$ref :t-name])
+                            (get (m/properties (m/deref $ref options)) ::t-name))
           same-file? (= file ref-file)]
       (when-not same-file?
         (swap! file-imports* update file set/union #{ref-file}))
-      (str (if-not same-file? (str import-alias ".")) ref-type-name))))
+      (str (if-not same-file? (str import-alias ".") nil) ref-type-name))))
 
 (defmethod -parse-ast-node [:type :number] [_ _] "number")
 (defmethod -parse-ast-node [:type :string] [_ _] "string")
 (defmethod -parse-ast-node [:type :boolean] [_ _] "boolean")
 (defmethod -parse-ast-node [:type :any] [_ _] "any")
 (defmethod -parse-ast-node [:type :undefined] [_ _] "undefined")
-(defmethod -parse-ast-node :const [{:keys [const] :as node} options]
+(defmethod -parse-ast-node :const [{:keys [const]} options]
   (cond
     (keyword? const) (str \" (name const) \")
     (string? const) (str \" const \")
@@ -74,8 +76,6 @@
 (defmethod -parse-ast-node [:type :tuple] [{:keys [items]} options]
   (str "[" (string/join "," (map #(-parse-ast-node % options) items)) "]"))
 
-(comment (-parse-ast-node (parse-ast [:tuple :int :string :boolean])))
-
 (defmethod -parse-ast-node :union [{items :union} options]
   (str "(" (string/join "|" (map #(-parse-ast-node % options) items)) ")"))
 
@@ -89,7 +89,8 @@
                                              :as options}]
   (let [idx-sign-literal (if index-signature
                            (str "[k:" (-parse-ast-node (first index-signature) options) "]:"
-                                (-parse-ast-node (second index-signature) options)))
+                                (-parse-ast-node (second index-signature) options))
+                           nil)
         properties-literal (if-not (empty? properties)
                              (string/join
                               ","
@@ -99,26 +100,25 @@
                                                            (name k))]
                                        (str \" property-name \"
                                             (if (contains? optional k) "?" nil) ":"
-                                            (do
-                                              (-parse-ast-node v options)))))
-                                   properties)))]
+                                            (-parse-ast-node v options))))
+                                   properties))
+                             nil)]
     (str "{" (string/join "," (filter (comp not string/blank?)
                                       [idx-sign-literal properties-literal]))
          "}")))
 
 (comment
   (-parse-ast-node
-   (->ast [:map [:a :int] [:b {:optional true} :string]]) 
+   (->ast [:map [:a :int] [:b {:optional true} :string]])
    {}))
 
 (defmethod -parse-ast-node :external-type [{:keys [schema]}
                                            {:keys [file
                                                    files-import-alias*
-                                                   file-imports*]
-                                            :as options}]
-  (let [{:keys [t-name t-path t-alias]} (::external-type (m/properties schema))
-        is-imported-already (if t-path (@file-imports* t-path))
-        canonical-alias (if t-path (get @files-import-alias* t-path))
+                                                   file-imports*]}]
+  (let [{:keys [t-name t-path t-alias]} (m/properties schema)
+        is-imported-already (if t-path (@file-imports* t-path) nil)
+        canonical-alias (if t-path (get @files-import-alias* t-path) nil)
         import-alias (if (or canonical-alias (not t-path))
                        canonical-alias
                        (if t-alias
@@ -128,7 +128,7 @@
       (swap! file-imports* update file set/union #{t-path}))
     (when (and t-path (not canonical-alias))
       (swap! files-import-alias* assoc t-path import-alias))
-    (str (if t-path (str import-alias ".")) t-name)))
+    (str (if t-path (str import-alias ".") nil) t-name)))
 
 (defn- letter-args
   ([letter-arg]
@@ -184,15 +184,15 @@
   (str "import * as " alias " from " \' from \' \;))
 
 (comment
-  (import-literal
-   (path/relative (path/dirname "flow/person/index.d.ts") "flow/index.d.ts")
-   "flow"))
+  #?(:cljs (import-literal
+            (path/relative (path/dirname "flow/person/index.d.ts") "flow/index.d.ts")
+            "flow")))
 
 (defn ->type-declaration-str
   [type-name literal jsdoc-literal options]
   (let [{:keys [export declare]} options]
-    (str (if jsdoc-literal (str jsdoc-literal \newline))
-         (if export "export ")
+    (str (if jsdoc-literal (str jsdoc-literal \newline) nil)
+         (if export "export " nil)
          (if declare "var " "type ")
          type-name (if declare ": " " = ") literal ";")))
 
@@ -200,6 +200,7 @@
 
 (defmulti provide-jsdoc #'-dispatch-provide-jsdoc)
 
+#_{:clj-kondo/ignore [:unused-binding]}
 (defmethod provide-jsdoc ::schema
   [jsdoc-k schema-id t-options options]
   ["schema" (-> schema-id (m/deref options) m/form str)])
@@ -211,7 +212,8 @@
          (->> jsdoc-pairs
               (map (fn [[attribute value]] (str " * @" attribute " " value)))
               (string/join "\n"))
-         "\n */")))
+         "\n */")
+    nil))
 
 (comment
   (println (-jsdoc-literal [["schema" (str '[:map-of any?])]
@@ -224,7 +226,14 @@
          (fn [m [file schema-type-vs]]
            (merge m (reduce
                      (fn [m [schema-id type-desc]]
-                       (assoc m schema-id (assoc type-desc :file file)))
+                       (let [schema-type-options
+                             (into {}
+                                   (comp
+                                    (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
+                                    (map (fn [[k v]] [(-> k name keyword) v])))
+                                   (m/properties (m/deref schema-id options)))
+                             type-desc (merge schema-type-options type-desc)]
+                         (assoc m schema-id (assoc type-desc :file file))))
                      {} schema-type-vs)))
          {} file->schema-type-vs)
 
@@ -244,8 +253,9 @@
         (reduce
          (fn [m [file schema-type-vs]]
            (reduce
-            (fn [m [schema-id {:keys [t-name jsdoc] :as t-options}]]
-              (let [literal (-parse-ast-node (->ast schema-id options)
+            (fn [m [schema-id t-options]]
+              (let [{:keys [jsdoc] :as t-options} (merge t-options (get m schema-id))
+                    literal (-parse-ast-node (->ast schema-id options)
                                              (merge options
                                                     {:deref-types {schema-id true}
                                                      :file file
@@ -300,16 +310,55 @@
                    m [file]
                    (let [import (string/join "\n" (get file->import-literals file))
                          types (string/join "\n" (get file->type-literals file))]
-                     (str (if-not (string/blank? import) (str import "\n\n"))
+                     (str (if-not (string/blank? import) (str import "\n\n") nil)
                           types))))
                 {} files)]
     file-contents))
 
+(defn parse-matching-schemas
+  "Only applicable to qualified schema-types and not defined in malli.core"
+  {:arglists '([options]
+               [pred options])}
+  ([pred {:keys [registry transform] :as options}]
+   (let [schemas (into []
+                       (comp (filter (fn [[k s]]
+                                       (and (qualified-keyword? k)
+                                            (not= "malli.core" (namespace k))
+                                            (pred k s))))
+                             (map (fn [[k _]] [k {}]))
+                             (map (or transform identity)))
+                       (mr/schemas (mr/composite-registry registry m/default-registry)))
+         parse-files-arg (persistent!
+                          (reduce
+                           (fn [acc [k opts]]
+                             (let [file-name (str (csk/->snake_case (namespace k)) ".d.ts")]
+                               (if-let [asdf (get acc file-name)]
+                                 (assoc! acc file-name (conj asdf [k opts]))
+                                 (assoc! acc file-name [[k opts]]))))
+                           (transient {}) schemas))]
+     (parse-files parse-files-arg options)))
+  ([options]
+   (parse-matching-schemas (constantly true) options))
+  ([]
+   (parse-matching-schemas (constantly true) {})))
+
+(defn parse-ns-schemas
+  ([ns-coll options]
+   (parse-matching-schemas
+    (let [ns-set (into #{} (map str) ns-coll)]
+      (fn [k _]
+        (let [k-ns (namespace k)]
+          (contains? ns-set k-ns))))
+    options))
+  ([ns-coll]
+   (parse-ns-schemas ns-coll {})))
+
 (defn external-type
   ([type-name type-path type-import-alias]
-   [any? {::external-type {:t-name type-name
-                           :t-path type-path
-                           :t-alias type-import-alias}}])
+   [any? {::external-type true
+          ::t-name type-name
+          ::t-path type-path
+          ::t-alias type-import-alias}])
   ([type-name type-path]
    (external-type type-name type-path nil))
   ([type-name]
