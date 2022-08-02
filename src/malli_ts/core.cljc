@@ -316,7 +316,7 @@
     file-contents))
 
 (defn parse-matching-schemas
-  "Only applicable to qualified schema-types and not in defined in malli.core"
+  "Only applicable to qualified schema-types and not defined in malli.core"
   {:arglists '([options]
                [pred options])}
   ([pred {:keys [registry transform] :as options}]
