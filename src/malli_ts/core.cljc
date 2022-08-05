@@ -47,7 +47,11 @@
          (->ast (:schema node)))
      options)
     (let [ref-file (get-in schema-id->type-desc [$ref :file])
-          import-alias (get @files-import-alias* ref-file)
+          import-alias (or (get @files-import-alias* ref-file)
+                           (let [import-alias (-> $ref namespace munge
+                                                  (string/replace "." "$"))]
+                             (swap! files-import-alias* assoc ref-file import-alias)
+                             import-alias))
           ref-type-name (or (get-in schema-id->type-desc [$ref :t-name])
                             (get (m/properties (m/deref $ref options)) ::t-name))
           same-file? (= file ref-file)]

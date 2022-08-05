@@ -1,4 +1,4 @@
-(defproject org.clojars.flowyourmoney/malli-ts "0.2.0"
+(defproject org.clojars.flowyourmoney/malli-ts "0.2.1"
   :description "A library for generating TS type definitions from malli schemas"
   :url "https://flowyour.money/"
 
