@@ -56,7 +56,7 @@
                                   [:toSha256 {:t-name "toSha256" :declare true}]]}
              {:export-default true
               :jsdoc-default [::mt/schema]
-              :use-default-registry true
+              :use-default-schemas true
               :registry
               {:k [:=> [:catn [:s string?]] any?]
                :sym [:=> [:catn [:s string?]] any?]

@@ -5,7 +5,8 @@
             [camel-snake-kebab.core :as csk]
             [clojure.string :as string]
             [clojure.set :as set]
-            #?(:cljs ["path" :as path])))
+            #?(:cljs ["path" :as path]))
+  (:use [com.rpl.specter]))
 
 #?(:clj
    (defn- get-path
@@ -33,6 +34,12 @@
 
 (defmulti ^:private -parse-ast-node
   #'-dispatch-parse-ast-node)
+
+(defn parse-ast-node
+  ([node options]
+   (-parse-ast-node node options))
+  ([node]
+   (-parse-ast-node node {})))
 
 (defmethod -parse-ast-node :$ref
   [{:keys [$ref] :as node} {:keys [deref-types
@@ -110,6 +117,9 @@
 (comment
   (-parse-ast-node
    (->ast [:map [:a :int] [:b {:optional true} :string]])
+   {})
+  (-parse-ast-node
+   (->ast [:map [:a :int] [:b {"optional" true} :string]])
    {}))
 
 (defmethod -parse-ast-node :external-type [{:keys [schema]}
@@ -221,31 +231,48 @@
 
 (defn parse-files
   [file->schema-type-vs options]
-  (let [schema-id->type-desc
-        (reduce
-         (fn [m [file schema-type-vs]]
-           (merge m (reduce
-                     (fn [m [schema-id type-desc]]
-                       (let [schema-type-options
-                             (into {}
-                                   (comp
-                                    (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
-                                    (map (fn [[k v]] [(-> k name keyword) v])))
-                                   (m/properties (m/deref schema-id options)))
-                             type-desc (merge schema-type-options type-desc)]
-                         (assoc m schema-id (assoc type-desc :file file))))
-                     {} schema-type-vs)))
-         {} file->schema-type-vs)
-
-        {:keys [registry use-default-schemas]
+  (let [{:keys [registry use-default-schemas]
          :or {registry {} use-default-schemas true}} options
+
+        options (merge options {:registry (if use-default-schemas
+                                            (merge registry (m/default-schemas))
+                                            registry)})
+        schema-id->type-desc
+        ;; (reduce
+        ;;  (fn [m [file schema-type-vs]]
+        ;;    (merge m (reduce
+        ;;              (fn [m [schema-id type-desc]]
+        ;;                (let [schema-type-options
+        ;;                      (into {}
+        ;;                            (comp
+        ;;                             (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
+        ;;                             (map (fn [[k v]] [(-> k name keyword) v])))
+        ;;                            (m/properties (m/deref schema-id options)))
+        ;;                      type-desc (merge schema-type-options type-desc)]
+        ;;                  (assoc m schema-id (assoc type-desc :file file))))
+        ;;              {} schema-type-vs)))
+        ;;  {} file->schema-type-vs)
+        (transform
+         [ALL]
+         (fn [[file schema-id->type-desc]]
+           [file
+            (transform
+             [ALL]
+             (fn [[schema-id type-desc]]
+               (let [schema-type-options
+                     (into {}
+                           (comp
+                            (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
+                            (map (fn [[k v]] [(-> k name keyword) v])))
+                           (m/properties (m/deref schema-id options)))
+                     type-desc (merge schema-type-options type-desc)]
+                 [schema-id (assoc type-desc :file file)]))
+             schema-id->type-desc)])
+         file->schema-type-vs)
 
         options (merge options {:schema-id->type-desc schema-id->type-desc
                                 :file-imports* (atom {})
-                                :files-import-alias* (atom {})
-                                :registry (if use-default-schemas
-                                            (merge registry (m/default-schemas))
-                                            registry)})
+                                :files-import-alias* (atom {})})
 
         jsdoc-default (get options :jsdoc-default)
 
@@ -272,47 +299,41 @@
 
         {:keys [export-default files-import-alias* file-imports*]} options
 
-        files (map (fn [[k _]] k) file->schema-type-vs)
-
-        file->import-literals
+        [file->import-literals file->type-literals]
         (reduce
-         (fn [m file]
-           (assoc-in
-            m [file]
-            (map
-             (fn [import-file]
-               (import-literal
-                (path-relative file import-file)
-                (get @files-import-alias* import-file)))
-             (get @file-imports* file))))
-         {} files)
-
-        file->type-literals
-        (reduce
-         (fn [m [file scheva-type-vs]]
-           (assoc
-            m file
-            (map
-             (fn [[schema-id _]]
-               (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
-                     (get schema-id->type-desc schema-id)]
-                 (->type-declaration-str
-                  t-name literal jsdoc-literal
-                  (merge t-options
-                         {:export (if (some? export) export export-default)}))))
-             scheva-type-vs)))
+         (fn [[m-import m-type] [file scheva-type-vs]]
+           [(assoc
+             m-import file
+             (map
+              (fn [import-file]
+                (import-literal
+                 (path-relative file import-file)
+                 (get @files-import-alias* import-file)))
+              (get @file-imports* file)))
+            (assoc
+             m-type file
+             (map
+              (fn [[schema-id _]]
+                (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
+                      (get schema-id->type-desc schema-id)
+                      t-name (or t-name
+                                 (munge (name schema-id)))]
+                  (->type-declaration-str
+                   t-name literal jsdoc-literal
+                   (merge t-options
+                          {:export (if (some? export) export export-default)}))))
+              scheva-type-vs))])
          {} file->schema-type-vs)
 
         file-contents
-        (reduce (fn [m
-                     file]
-                  (assoc-in
-                   m [file]
+        (reduce (fn [m [file]]
+                  (assoc
+                   m file
                    (let [import (string/join "\n" (get file->import-literals file))
                          types (string/join "\n" (get file->type-literals file))]
                      (str (if-not (string/blank? import) (str import "\n\n") nil)
                           types))))
-                {} files)]
+                {} file->schema-type-vs)]
     file-contents))
 
 (defn parse-matching-schemas

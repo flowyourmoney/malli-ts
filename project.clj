@@ -1,4 +1,4 @@
-(defproject org.clojars.flowyourmoney/malli-ts "0.2.0"
+(defproject org.clojars.flowyourmoney/malli-ts "0.3.0-SNAPSHOT"
   :description "A library for generating TS type definitions from malli schemas"
   :url "https://flowyour.money/"
 
@@ -8,7 +8,8 @@
   :dependencies
   [[org.clojure/clojure "1.11.1"]
    [metosin/malli "0.8.9"]
-   [camel-snake-kebab "0.4.2"]]
+   [camel-snake-kebab "0.4.2"]
+   [com.rpl/specter "1.1.4"]]
 
   :source-paths
   ["src"]
