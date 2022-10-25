@@ -11,7 +11,9 @@
 (comment
   (mi/instrument! 
    {:filters [(mi/-filter-ns 'malli-ts.core)] 
-    :report (malli-dev-pretty/thrower)}))
+    :report (malli-dev-pretty/thrower)})
+  
+  (mi/unstrument!))
 
 
 (deftest function-types

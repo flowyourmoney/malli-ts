@@ -237,11 +237,11 @@
                             ["author" "Mr. Poopybutthole"]])))
 
 (m/=> transform-parse-files-input-into-schema-id->type-options
-      [:=> {:registry core-schemas/registry}
+      [:=>
        [:catn
-        [:file->schema-type-vectors ::core-schemas/file->schema-type-vectors]
-        [:options ::core-schemas/parse-files-options]]
-       ::core-schemas/schema-id->type-options])
+        [:file->schema-type-vectors core-schemas/file->schema-type-vectors]
+        [:options core-schemas/parse-files-options]]
+       core-schemas/schema-id->type-options])
 
 (defn- transform-parse-files-input-into-schema-id->type-options
   [file->schema-type-vectors options]
@@ -261,11 +261,11 @@
    {} file->schema-type-vectors))
 
 (m/=> assoc-literals
-      [:=> {:registry core-schemas/registry}
+      [:=>
        [:catn
-        [:file->schema-type-vectors ::core-schemas/file->schema-type-vectors]
-        [:options ::core-schemas/assoc-literals-options]]
-       ::core-schemas/schema-id->type-options])
+        [:file->schema-type-vectors core-schemas/file->schema-type-vectors]
+        [:options core-schemas/assoc-literals-options]]
+       core-schemas/schema-id->type-options])
 
 (defn- assoc-literals
   [file->schema-type-vectors
@@ -291,10 +291,10 @@
    schema-id->type-options file->schema-type-vectors))
 
 (m/=> aggregate-into-file-maps
-      [:=> {:registry core-schemas/registry}
+      [:=>
        [:catn
-        [:file->schema-type-vectors ::core-schemas/file->schema-type-vectors]
-        [:options ::core-schemas/assoc-literals-options]]
+        [:file->schema-type-vectors core-schemas/file->schema-type-vectors]
+        [:options core-schemas/assoc-literals-options]]
        [:catn
         [:file->import-literals [:map-of string? [:sequential string?]]]
         [:file->type-literals [:map-of string? [:sequential string?]]]]])

@@ -28,7 +28,7 @@
    [:vector
     [:catn
      [:schema-id keyword?]
-     [:schema-type-options ::schema-type-options]]]])
+     [:schema-type-options schema-type-options]]]])
 
 (def parse-files-options
   [:map
@@ -46,7 +46,7 @@
 
 (def assoc-literals-options
   (conj parse-files-options
-        [:schema-id->type-options ::schema-id->type-options]
+        [:schema-id->type-options schema-id->type-options]
         [:file-imports* some?]
         [:files-import-alias* some?]))
 
