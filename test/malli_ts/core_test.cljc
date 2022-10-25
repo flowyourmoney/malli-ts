@@ -4,7 +4,15 @@
       :cljs [cljs.test :refer-macros [deftest is testing]])
    [malli-ts.ast :refer [->ast]]
    [malli-ts.core :refer [->type-declaration-str -jsdoc-literal parse-ast-node
-                          parse-files] :as mts]))
+                          parse-files] :as mts]
+   [malli.instrument :as mi]
+   [malli.dev.pretty :as malli-dev-pretty]))
+
+(comment
+  (mi/instrument! 
+   {:filters [(mi/-filter-ns 'malli-ts.core)] 
+    :report (malli-dev-pretty/thrower)}))
+
 
 (deftest function-types
   (is (= "(a:string, b:number) => {\"a\":number,\"b\":string}"

@@ -1,5 +1,6 @@
 (ns malli-ts.core
   (:require [malli-ts.ast :refer [->ast]]
+            [malli-ts.core-schema :as core-schemas]
             [malli.core :as m]
             [malli.registry :as mr]
             [camel-snake-kebab.core :as csk]
@@ -44,24 +45,24 @@
 
 (defmethod -parse-ast-node :$ref
   [{:keys [$ref] :as node} {:keys [deref-types
-                                   schema-id->type-desc
+                                   schema-id->type-options
                                    files-import-alias*
                                    file-imports*
                                    file]
                             :as options}]
-  (if (or (get deref-types $ref) (not (get schema-id->type-desc $ref)))
+  (if (or (get deref-types $ref) (not (get schema-id->type-options $ref)))
     (-parse-ast-node
      (or (get-in node [:definitions $ref])
          (->ast (:schema node)))
      options)
-    (let [ref-file (get-in schema-id->type-desc [$ref :file])
+    (let [ref-file (get-in schema-id->type-options [$ref :file])
           import-alias (or (get @files-import-alias* ref-file)
                            (get
                             (swap!
                              files-import-alias* assoc ref-file
                              (csk/->camelCase (string/join "-" (drop-last (string/split ref-file #"/")))))
                             ref-file))
-          ref-type-name (or (get-in schema-id->type-desc [$ref :t-name])
+          ref-type-name (or (get-in schema-id->type-options [$ref :t-name])
                             (get (m/properties (m/deref $ref options)) ::t-name))
           same-file? (= file ref-file)]
       (when-not same-file?
@@ -235,8 +236,99 @@
   (println (-jsdoc-literal [["schema" (str '[:map-of any?])]
                             ["author" "Mr. Poopybutthole"]])))
 
+(m/=> transform-parse-files-input-into-schema-id->type-options
+      [:=> {:registry core-schemas/registry}
+       [:catn
+        [:file->schema-type-vectors ::core-schemas/file->schema-type-vectors]
+        [:options ::core-schemas/parse-files-options]]
+       ::core-schemas/schema-id->type-options])
+
+(defn- transform-parse-files-input-into-schema-id->type-options
+  [file->schema-type-vectors options]
+  (reduce
+   (fn [m [file schema-type-vs]]
+     (merge m (reduce
+               (fn [m [schema-id type-options]]
+                 (let [schema-type-options
+                       (into {}
+                             (comp
+                              (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
+                              (map (fn [[k v]] [(-> k name keyword) v])))
+                             (m/properties (m/deref schema-id options)))
+                       type-options (merge schema-type-options type-options)]
+                   (assoc m schema-id (assoc type-options :file file))))
+               {} schema-type-vs)))
+   {} file->schema-type-vectors))
+
+(m/=> assoc-literals
+      [:=> {:registry core-schemas/registry}
+       [:catn
+        [:file->schema-type-vectors ::core-schemas/file->schema-type-vectors]
+        [:options ::core-schemas/assoc-literals-options]]
+       ::core-schemas/schema-id->type-options])
+
+(defn- assoc-literals
+  [file->schema-type-vectors
+   {:keys [schema-id->type-options jsdoc-default] :as options}]
+  (reduce
+   (fn [m [file schema-type-vectors]]
+     (reduce
+      (fn [m [schema-id t-options]]
+        (let [{:keys [jsdoc] :as t-options} (merge t-options (get m schema-id))
+              literal (-parse-ast-node (->ast schema-id options)
+                                       (merge options
+                                              {:deref-types {schema-id true}
+                                               :file file
+                                               :t-options t-options}))
+              jsdoc-literal
+              (->> (concat jsdoc-default jsdoc)
+                   (map #(provide-jsdoc % schema-id t-options options))
+                   -jsdoc-literal)]
+          (-> m
+              (assoc-in [schema-id :literal] literal)
+              (assoc-in [schema-id :jsdoc-literal] jsdoc-literal))))
+      m schema-type-vectors))
+   schema-id->type-options file->schema-type-vectors))
+
+(m/=> aggregate-into-file-maps
+      [:=> {:registry core-schemas/registry}
+       [:catn
+        [:file->schema-type-vectors ::core-schemas/file->schema-type-vectors]
+        [:options ::core-schemas/assoc-literals-options]]
+       [:catn
+        [:file->import-literals [:map-of string? [:sequential string?]]]
+        [:file->type-literals [:map-of string? [:sequential string?]]]]])
+
+(defn- aggregate-into-file-maps
+  [file->schema-type-vectors
+   {:keys [schema-id->type-options export-default files-import-alias* file-imports*]}]
+  (reduce
+   (fn [[m-import m-type] [file scheva-type-vs]]
+     [(assoc
+       m-import file
+       (map
+        (fn [import-file]
+          (import-literal
+           (import-path-relative file import-file)
+           (get @files-import-alias* import-file)))
+        (get @file-imports* file)))
+      (assoc
+       m-type file
+       (map
+        (fn [[schema-id _]]
+          (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
+                (get schema-id->type-options schema-id)
+                t-name (or t-name
+                           (munge (name schema-id)))]
+            (->type-declaration-str
+             t-name literal jsdoc-literal
+             (merge t-options
+                    {:export (if (some? export) export export-default)}))))
+        scheva-type-vs))])
+   [{} {}] file->schema-type-vectors))
+
 (defn parse-files
-  [file->schema-type-vs options]
+  [file->schema-type-vectors options]
   (let [{:keys [registry use-default-schemas files-import-alias]
          :or {registry {}, use-default-schemas true, files-import-alias {}}} options
 
@@ -244,76 +336,21 @@
                                             (merge registry (m/default-schemas))
                                             registry)})
 
-        schema-id->type-desc
-        (reduce
-         (fn [m [file schema-type-vs]]
-           (merge m (reduce
-                     (fn [m [schema-id type-desc]]
-                       (let [schema-type-options
-                             (into {}
-                                   (comp
-                                    (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
-                                    (map (fn [[k v]] [(-> k name keyword) v])))
-                                   (m/properties (m/deref schema-id options)))
-                             type-desc (merge schema-type-options type-desc)]
-                         (assoc m schema-id (assoc type-desc :file file))))
-                     {} schema-type-vs)))
-         {} file->schema-type-vs)
+        schema-id->type-options
+        (transform-parse-files-input-into-schema-id->type-options
+         file->schema-type-vectors options)
 
-        options (merge options {:schema-id->type-desc schema-id->type-desc
+        options (merge options {:schema-id->type-options schema-id->type-options
                                 :file-imports* (atom {})
                                 :files-import-alias* (atom files-import-alias)})
 
-        jsdoc-default (get options :jsdoc-default)
+        schema-id->type-options
+        (assoc-literals file->schema-type-vectors options)
 
-        schema-id->type-desc ;; assocs literal into type-desc
-        (reduce
-         (fn [m [file schema-type-vs]]
-           (reduce
-            (fn [m [schema-id t-options]]
-              (let [{:keys [jsdoc] :as t-options} (merge t-options (get m schema-id))
-                    literal (-parse-ast-node (->ast schema-id options)
-                                             (merge options
-                                                    {:deref-types {schema-id true}
-                                                     :file file
-                                                     :t-options t-options}))
-                    jsdoc-literal
-                    (->> (concat jsdoc-default jsdoc)
-                         (map #(provide-jsdoc % schema-id t-options options))
-                         -jsdoc-literal)]
-                (-> m
-                    (assoc-in [schema-id :literal] literal)
-                    (assoc-in [schema-id :jsdoc-literal] jsdoc-literal))))
-            m schema-type-vs))
-         schema-id->type-desc file->schema-type-vs)
-
-        {:keys [export-default files-import-alias* file-imports*]} options
+        options (assoc options :schema-id->type-options schema-id->type-options)
 
         [file->import-literals file->type-literals]
-        (reduce
-         (fn [[m-import m-type] [file scheva-type-vs]]
-           [(assoc
-             m-import file
-             (map
-              (fn [import-file]
-                (import-literal
-                 (import-path-relative file import-file)
-                 (get @files-import-alias* import-file)))
-              (get @file-imports* file)))
-            (assoc
-             m-type file
-             (map
-              (fn [[schema-id _]]
-                (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
-                      (get schema-id->type-desc schema-id)
-                      t-name (or t-name
-                                 (munge (name schema-id)))]
-                  (->type-declaration-str
-                   t-name literal jsdoc-literal
-                   (merge t-options
-                          {:export (if (some? export) export export-default)}))))
-              scheva-type-vs))])
-         [{} {}] file->schema-type-vs)
+        (aggregate-into-file-maps file->schema-type-vectors options)
 
         file-contents
         (reduce (fn [m [file]]
@@ -323,7 +360,7 @@
                          types (string/join "\n" (get file->type-literals file))]
                      (str (if-not (string/blank? import) (str import "\n\n") nil)
                           types))))
-                {} file->schema-type-vs)]
+                {} file->schema-type-vectors)]
     file-contents))
 
 (defn parse-matching-schemas
