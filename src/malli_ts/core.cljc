@@ -12,12 +12,14 @@
      [f]
      (java.nio.file.Paths/get f (into-array String []))))
 
-(defn- path-relative
+(defn- import-path-relative
   [f1 f2]
-  #?(:cljs (path/relative (path/dirname f1) f2)
-     :clj (let [p1 (get-path f1)
-                p2 (get-path f2)]
-            (str (.relativize p1 p2)))))
+  (if-let [absolute (get f2 :absolute)]
+    absolute
+    #?(:cljs (path/relative (path/dirname f1) f2)
+       :clj (let [p1 (get-path f1)
+                  p2 (get-path f2)]
+              (str (.relativize p1 p2))))))
 
 (defn- -dispatch-parse-ast-node
   [node options]
@@ -34,6 +36,12 @@
 (defmulti ^:private -parse-ast-node
   #'-dispatch-parse-ast-node)
 
+(defn parse-ast-node
+  ([node options]
+   (-parse-ast-node node options))
+  ([node]
+   (-parse-ast-node node {})))
+
 (defmethod -parse-ast-node :$ref
   [{:keys [$ref] :as node} {:keys [deref-types
                                    schema-id->type-desc
@@ -47,7 +55,12 @@
          (->ast (:schema node)))
      options)
     (let [ref-file (get-in schema-id->type-desc [$ref :file])
-          import-alias (get @files-import-alias* ref-file)
+          import-alias (or (get @files-import-alias* ref-file)
+                           (get
+                            (swap!
+                             files-import-alias* assoc ref-file
+                             (csk/->camelCase (string/join "-" (drop-last (string/split ref-file #"/")))))
+                            ref-file))
           ref-type-name (or (get-in schema-id->type-desc [$ref :t-name])
                             (get (m/properties (m/deref $ref options)) ::t-name))
           same-file? (= file ref-file)]
@@ -110,20 +123,23 @@
 (comment
   (-parse-ast-node
    (->ast [:map [:a :int] [:b {:optional true} :string]])
+   {})
+  (-parse-ast-node
+   (->ast [:map [:a :int] [:b {"optional" true} :string]])
    {}))
 
 (defmethod -parse-ast-node :external-type [{:keys [schema]}
                                            {:keys [file
                                                    files-import-alias*
                                                    file-imports*]}]
-  (let [{:keys [t-name t-path t-alias]} (m/properties schema)
+  (let [{:keys [::t-name ::t-path ::t-alias]} (m/properties schema)
         is-imported-already (if t-path (@file-imports* t-path) nil)
         canonical-alias (if t-path (get @files-import-alias* t-path) nil)
         import-alias (if (or canonical-alias (not t-path))
                        canonical-alias
                        (if t-alias
                          t-alias
-                         (csk/->camelCase (string/join "-" (take-last 2 (string/split t-path "/"))))))]
+                         (csk/->camelCase (string/join "-" (drop-last (string/split t-path #"/"))))))]
     (when (and t-path (not is-imported-already))
       (swap! file-imports* update file set/union #{t-path}))
     (when (and t-path (not canonical-alias))
@@ -221,7 +237,14 @@
 
 (defn parse-files
   [file->schema-type-vs options]
-  (let [schema-id->type-desc
+  (let [{:keys [registry use-default-schemas files-import-alias]
+         :or {registry {}, use-default-schemas true, files-import-alias {}}} options
+
+        options (merge options {:registry (if use-default-schemas
+                                            (merge registry (m/default-schemas))
+                                            registry)})
+
+        schema-id->type-desc
         (reduce
          (fn [m [file schema-type-vs]]
            (merge m (reduce
@@ -237,15 +260,9 @@
                      {} schema-type-vs)))
          {} file->schema-type-vs)
 
-        {:keys [registry use-default-schemas]
-         :or {registry {} use-default-schemas true}} options
-
         options (merge options {:schema-id->type-desc schema-id->type-desc
                                 :file-imports* (atom {})
-                                :files-import-alias* (atom {})
-                                :registry (if use-default-schemas
-                                            (merge registry (m/default-schemas))
-                                            registry)})
+                                :files-import-alias* (atom files-import-alias)})
 
         jsdoc-default (get options :jsdoc-default)
 
@@ -272,47 +289,41 @@
 
         {:keys [export-default files-import-alias* file-imports*]} options
 
-        files (map (fn [[k _]] k) file->schema-type-vs)
-
-        file->import-literals
+        [file->import-literals file->type-literals]
         (reduce
-         (fn [m file]
-           (assoc-in
-            m [file]
-            (map
-             (fn [import-file]
-               (import-literal
-                (path-relative file import-file)
-                (get @files-import-alias* import-file)))
-             (get @file-imports* file))))
-         {} files)
-
-        file->type-literals
-        (reduce
-         (fn [m [file scheva-type-vs]]
-           (assoc
-            m file
-            (map
-             (fn [[schema-id _]]
-               (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
-                     (get schema-id->type-desc schema-id)]
-                 (->type-declaration-str
-                  t-name literal jsdoc-literal
-                  (merge t-options
-                         {:export (if (some? export) export export-default)}))))
-             scheva-type-vs)))
-         {} file->schema-type-vs)
+         (fn [[m-import m-type] [file scheva-type-vs]]
+           [(assoc
+             m-import file
+             (map
+              (fn [import-file]
+                (import-literal
+                 (import-path-relative file import-file)
+                 (get @files-import-alias* import-file)))
+              (get @file-imports* file)))
+            (assoc
+             m-type file
+             (map
+              (fn [[schema-id _]]
+                (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
+                      (get schema-id->type-desc schema-id)
+                      t-name (or t-name
+                                 (munge (name schema-id)))]
+                  (->type-declaration-str
+                   t-name literal jsdoc-literal
+                   (merge t-options
+                          {:export (if (some? export) export export-default)}))))
+              scheva-type-vs))])
+         [{} {}] file->schema-type-vs)
 
         file-contents
-        (reduce (fn [m
-                     file]
-                  (assoc-in
-                   m [file]
+        (reduce (fn [m [file]]
+                  (assoc
+                   m file
                    (let [import (string/join "\n" (get file->import-literals file))
                          types (string/join "\n" (get file->type-literals file))]
                      (str (if-not (string/blank? import) (str import "\n\n") nil)
                           types))))
-                {} files)]
+                {} file->schema-type-vs)]
     file-contents))
 
 (defn parse-matching-schemas
