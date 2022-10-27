@@ -7,7 +7,7 @@
 
   :dependencies
   [[org.clojure/clojure "1.11.1"]
-   [metosin/malli "0.8.9"]
+   [metosin/malli "0.9.2"]
    [camel-snake-kebab "0.4.2"]]
 
   :source-paths

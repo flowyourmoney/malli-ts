@@ -1,0 +1,7 @@
+{:deps
+ {metosin/malli {:mvn/version "0.9.2"}
+  camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}}
+ 
+ :paths ["src"]
+ 
+ :aliases {:dev {:extra-paths ["development" "tests"]}}}
