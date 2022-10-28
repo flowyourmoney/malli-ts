@@ -150,8 +150,7 @@
                           data)
            model-type   (js/goog.object.get obj "modelType" nil)
            clj<->js-map (clj<->js-key-mapping *schema-registry model-type)]
-       (cljs.pprint/pprint clj<->js-map)
-       (to-clj' data (update-in clj<->js-map [:js->clj-paths-keys] assoc "user" user))))
+       (to-clj' data clj<->js-map)))
 
    (declare map-proxy)
 
@@ -159,7 +158,7 @@
      ([res] res)
      ([res x] (doto res (.push x))))
 
-   (defn- into-js-array
+   (defn into-js-array
      [xform from]
      (transduce xform array-push (array) from))
 
