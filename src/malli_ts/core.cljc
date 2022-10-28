@@ -18,9 +18,9 @@
   (if-let [absolute (get f2 :absolute)]
     absolute
     #?(:cljs (path/relative (path/dirname f1) f2)
-       :clj (let [p1 (get-path f1)
+       :clj (let [p1 (.resolve (get-path f1) "..") ; quick way to get the parent directory
                   p2 (get-path f2)]
-              (str (.relativize p1 p2))))))
+              (str "./" (-> (.relativize p1 p2) (string/replace #"\.d\.ts$" "")))))))
 
 (defn- -dispatch-parse-ast-node
   [node options]
@@ -59,8 +59,7 @@
           import-alias (or (get @files-import-alias* ref-file)
                            (get
                             (swap!
-                             files-import-alias* assoc ref-file
-                             (csk/->camelCase (string/join "-" (drop-last (string/split ref-file #"/")))))
+                             files-import-alias* assoc ref-file (->> (string/split ref-file #"[.]") (string/join "_")))
                             ref-file))
           ref-type-name (or (get-in schema-id->type-options [$ref :t-name])
                             (get (m/properties (m/deref $ref options)) ::t-name))
@@ -340,6 +339,9 @@
         (transform-parse-files-input-into-schema-id->type-options
          file->schema-type-vectors options)
 
+        ;; Normalize symbols to strings
+        files-import-alias (into {} (map (fn [[k v]] [(str k) (str v)]) files-import-alias))
+
         options (merge options {:schema-id->type-options schema-id->type-options
                                 :file-imports* (atom {})
                                 :files-import-alias* (atom files-import-alias)})
@@ -379,7 +381,7 @@
          parse-files-arg (persistent!
                           (reduce
                            (fn [acc [k opts]]
-                             (let [file-name (str (csk/->snake_case (namespace k)) ".d.ts")]
+                             (let [file-name (csk/->snake_case (namespace k))]
                                (if-let [asdf (get acc file-name)]
                                  (assoc! acc file-name (conj asdf [k opts]))
                                  (assoc! acc file-name [[k opts]]))))
