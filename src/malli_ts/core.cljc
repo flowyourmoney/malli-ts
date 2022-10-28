@@ -18,9 +18,11 @@
   (if-let [absolute (get f2 :absolute)]
     absolute
     #?(:cljs (path/relative (path/dirname f1) f2)
-       :clj (let [p1 (.resolve (get-path f1) "..") ; quick way to get the parent directory
+       :clj (let [p1 (.resolve (get-path f1)
+                               ;; quick way to get the parent directory if import has .d.ts extension
+                               (if-not (re-matches #"[.]" f1) ".." "."))
                   p2 (get-path f2)]
-              (str "./" (-> (.relativize p1 p2) (string/replace #"\.d\.ts$" "")))))))
+              (str "./"  (.relativize p1 p2))))))
 
 (defn- -dispatch-parse-ast-node
   [node options]
@@ -59,7 +61,13 @@
           import-alias (or (get @files-import-alias* ref-file)
                            (get
                             (swap!
-                             files-import-alias* assoc ref-file (->> (string/split ref-file #"[.]") (string/join "_")))
+                             files-import-alias* assoc ref-file
+                             (as-> ref-file $
+                               (string/split $ #"[./]")
+                               (if (= (take-last 2 $) ["d" "ts"])
+                                 (drop-last 2 $)
+                                 $)
+                               (string/join "_" $)))
                             ref-file))
           ref-type-name (or (get-in schema-id->type-options [$ref :t-name])
                             (get (m/properties (m/deref $ref options)) ::t-name))
@@ -357,7 +365,7 @@
         file-contents
         (reduce (fn [m [file]]
                   (assoc
-                   m file
+                   m (str file (if-not (re-matches #".*\.d\.ts$" file) ".d.ts" nil))
                    (let [import (string/join "\n" (get file->import-literals file))
                          types (string/join "\n" (get file->type-literals file))]
                      (str (if-not (string/blank? import) (str import "\n\n") nil)
