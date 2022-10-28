@@ -253,10 +253,13 @@
 (defn- transform-parse-files-input-into-schema-id->type-options
   [file->schema-type-vectors options]
   (reduce
-   (fn [m [file schema-type-vs]]
+   (fn [m [file schema-type-vectors]]
      (merge m (reduce
-               (fn [m [schema-id type-options]]
-                 (let [schema-type-options
+               (fn [m schema-type-vector]
+                 (let [[schema-id type-options] (if (seqable? schema-type-vector)
+                                                  schema-type-vector
+                                                  [schema-type-vector])
+                       schema-type-options
                        (into {}
                              (comp
                               (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
@@ -264,7 +267,7 @@
                              (m/properties (m/deref schema-id options)))
                        type-options (merge schema-type-options type-options)]
                    (assoc m schema-id (assoc type-options :file file))))
-               {} schema-type-vs)))
+               {} schema-type-vectors)))
    {} file->schema-type-vectors))
 
 (m/=> assoc-literals
@@ -280,16 +283,19 @@
   (reduce
    (fn [m [file schema-type-vectors]]
      (reduce
-      (fn [m [schema-id t-options]]
-        (let [{:keys [jsdoc] :as t-options} (merge t-options (get m schema-id))
+      (fn [m schema-type-vector]
+        (let [[schema-id type-options] (if (seq? schema-type-vector)
+                                         schema-type-vector
+                                         [schema-type-vector])
+              {:keys [jsdoc] :as type-options} (merge type-options (get m schema-id))
               literal (-parse-ast-node (->ast schema-id options)
                                        (merge options
                                               {:deref-types {schema-id true}
                                                :file file
-                                               :t-options t-options}))
+                                               :t-options type-options}))
               jsdoc-literal
               (->> (concat jsdoc-default jsdoc)
-                   (map #(provide-jsdoc % schema-id t-options options))
+                   (map #(provide-jsdoc % schema-id type-options options))
                    -jsdoc-literal)]
           (-> m
               (assoc-in [schema-id :literal] literal)
@@ -333,6 +339,13 @@
                     {:export (if (some? export) export export-default)}))))
         scheva-type-vs))])
    [{} {}] file->schema-type-vectors))
+
+(m/=> parse-files
+      [:=>
+       [:catn
+        [:file->schema-type-vectors core-schemas/file->schema-type-vectors]
+        [:options core-schemas/assoc-literals-options]]
+       core-schemas/parse-files-return])
 
 (defn parse-files
   [file->schema-type-vectors options]

@@ -1,18 +1,5 @@
 (ns malli-ts.core-schema)
 
-(comment
-  (require '[malli.provider :as mp]))
-
-(comment
-  (prn (mp/provide [{"malli-ts.ts.d.ts" [[:k {:declare true}]
-                                         [:sym {:declare true}]
-                                         [:toClj {:declare true}]
-                                         [:validate {:declare true}]
-                                         [:answerUltimateQuestion {:declare true}]
-                                         [:now {:t-name "now" :declare true}]
-                                         [:toSha256 {:t-name "toSha256" :declare true}]]
-                     "random/dir/universe.d.ts" [[:random.dir.universe/answer-to-everything {:t-name "answerToEverything"}]]}])))
-
 (def schema-type-options
   [:map
    [:declare {:optional true} boolean?]
@@ -26,9 +13,11 @@
   [:map-of
    string?
    [:vector
-    [:catn
-     [:schema-id keyword?]
-     [:schema-type-options schema-type-options]]]])
+    [:or
+     [:catn
+      [:schema-id keyword?]
+      [:schema-type-options schema-type-options]]
+     keyword?]]])
 
 (def parse-files-options
   [:map

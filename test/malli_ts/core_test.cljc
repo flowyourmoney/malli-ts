@@ -50,14 +50,17 @@
                        [::answerUltimateQuestion {:declare true}]
                        [::now {:t-name "now" :declare true}]
                        [::toSha256 {:t-name "toSha256" :declare true}]]
-   "random/dir/universe.d.ts" [[:random.dir.universe/answer-to-everything {:t-name "answerToEverything"}]]})
+   "random/dir/universe.d.ts" [[:random.dir.universe/answer-to-everything {:t-name "answerToEverything"}]]
+   "random/util/string" [:random.util.string/get-default-string-decoder]})
 
-(def parse-ns-schemas-data '#{malli-ts.core-test random.dir.universe})
+(def parse-ns-schemas-data
+  '#{malli-ts.core-test random.dir.universe random.util.string})
 
 (def parse-files-options
   {:export-default true
    :jsdoc-default [::mts/schema]
    :use-default-schemas true
+   :file-import-alias {'random.util.string "utilString"}
    :registry
    {::k [:=> [:catn [:s string?]] any?]
     ::sym [:=> [:catn [:s string?]] any?]
@@ -65,6 +68,10 @@
     ::validate [:=> [:catn [:schema any?] [:val any?]] any?]
     
     :random.dir.universe/answer-to-everything [:enum 42]
+
+    :random.util.string/get-default-string-decoder
+    [:=> :catn (mts/external-type "StringDecoder" "string_decoder")]
+    
     ::answerUltimateQuestion [:=> :cat :random.dir.universe/answer-to-everything]
 
     :global/date (mts/external-type "Date")
