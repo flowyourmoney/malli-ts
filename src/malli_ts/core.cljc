@@ -18,9 +18,11 @@
   (if-let [absolute (get f2 :absolute)]
     absolute
     #?(:cljs (path/relative (path/dirname f1) f2)
-       :clj (let [p1 (get-path f1)
+       :clj (let [p1 (.resolve (get-path f1)
+                               ;; quick way to get the parent directory if import has .d.ts extension
+                               (if-not (re-matches #"[.]" f1) ".." "."))
                   p2 (get-path f2)]
-              (str (.relativize p1 p2))))))
+              (str "./"  (.relativize p1 p2))))))
 
 (defn- -dispatch-parse-ast-node
   [node options]
@@ -44,26 +46,30 @@
    (-parse-ast-node node {})))
 
 (defmethod -parse-ast-node :$ref
-  [{:keys [$ref] :as node} {:keys [deref-types
+  [{:keys [$ref] :as node} {:keys [deref-type
                                    schema-id->type-options
                                    files-import-alias*
                                    file-imports*
                                    file]
                             :as options}]
-  (if (or (get deref-types $ref) (not (get schema-id->type-options $ref)))
+  (if (or (= deref-type $ref) (not (get schema-id->type-options $ref)))
     (-parse-ast-node
      (or (get-in node [:definitions $ref])
          (->ast (:schema node)))
-     options)
+     (dissoc options :deref-type))
     (let [ref-file (get-in schema-id->type-options [$ref :file])
           import-alias (or (get @files-import-alias* ref-file)
                            (get
                             (swap!
                              files-import-alias* assoc ref-file
-                             (csk/->camelCase (string/join "-" (drop-last (string/split ref-file #"/")))))
+                             (as-> ref-file $
+                               (string/split $ #"[./]")
+                               (if (= (take-last 2 $) ["d" "ts"])
+                                 (drop-last 2 $)
+                                 $)
+                               (string/join "_" $)))
                             ref-file))
-          ref-type-name (or (get-in schema-id->type-options [$ref :t-name])
-                            (get (m/properties (m/deref $ref options)) ::t-name))
+          ref-type-name (get-in schema-id->type-options [$ref :t-name])
           same-file? (= file ref-file)]
       (when-not same-file?
         (swap! file-imports* update file set/union #{ref-file}))
@@ -130,22 +136,31 @@
    {}))
 
 (defmethod -parse-ast-node :external-type [{:keys [schema]}
-                                           {:keys [file
+                                           {:keys [deref-type
+                                                   file
                                                    files-import-alias*
-                                                   file-imports*]}]
+                                                   file-imports*
+                                                   schema-id->type-options]}]
   (let [{:keys [::t-name ::t-path ::t-alias]} (m/properties schema)
-        is-imported-already (if t-path (@file-imports* t-path) nil)
-        canonical-alias (if t-path (get @files-import-alias* t-path) nil)
-        import-alias (if (or canonical-alias (not t-path))
-                       canonical-alias
-                       (if t-alias
-                         t-alias
-                         (csk/->camelCase (string/join "-" (drop-last (string/split t-path #"/"))))))]
-    (when (and t-path (not is-imported-already))
+        {:keys [t-name t-path t-alias]
+         :or {t-name t-name t-path t-path t-alias t-alias}} (get schema-id->type-options deref-type)
+        t-path-str (or (:absolute t-path) t-path)
+        is-imported-already (if t-path-str (@file-imports* t-path) nil)
+        canonical-alias (if t-path-str (get @files-import-alias* t-path-str) nil)
+        import-alias (or canonical-alias
+                         (cond
+                           t-alias t-alias
+                           t-path-str (as-> t-path-str $
+                                        (string/replace $ #"\.d\.ts" "")
+                                        (string/split $ #"[./]")
+                                        (string/join "-" $)
+                                        (csk/->snake_case $))
+                           :else nil))]
+    (when (and t-path-str (not is-imported-already))
       (swap! file-imports* update file set/union #{t-path}))
-    (when (and t-path (not canonical-alias))
-      (swap! files-import-alias* assoc t-path import-alias))
-    (str (if t-path (str import-alias ".") nil) t-name)))
+    (when (and import-alias (not canonical-alias))
+      (swap! files-import-alias* assoc t-path-str import-alias))
+    (str (if import-alias (str import-alias ".") nil) t-name)))
 
 (defn- letter-args
   ([letter-arg]
@@ -246,18 +261,25 @@
 (defn- transform-parse-files-input-into-schema-id->type-options
   [file->schema-type-vectors options]
   (reduce
-   (fn [m [file schema-type-vs]]
+   (fn [m [file schema-type-vectors]]
      (merge m (reduce
-               (fn [m [schema-id type-options]]
-                 (let [schema-type-options
+               (fn [m schema-type-vector]
+                 (let [[schema-id type-options] (if (seqable? schema-type-vector)
+                                                  schema-type-vector
+                                                  [schema-type-vector])
+                       schema-type-options
                        (into {}
                              (comp
                               (filter (fn [[k _]] (= (namespace k) "malli-ts.core")))
                               (map (fn [[k v]] [(-> k name keyword) v])))
                              (m/properties (m/deref schema-id options)))
-                       type-options (merge schema-type-options type-options)]
+                       type-options (merge  type-options
+                                            schema-type-options)
+                       type-options (if-not (:t-name type-options)
+                                      (assoc type-options :t-name (csk/->snake_case (name schema-id)))
+                                      type-options)]
                    (assoc m schema-id (assoc type-options :file file))))
-               {} schema-type-vs)))
+               {} schema-type-vectors)))
    {} file->schema-type-vectors))
 
 (m/=> assoc-literals
@@ -273,16 +295,21 @@
   (reduce
    (fn [m [file schema-type-vectors]]
      (reduce
-      (fn [m [schema-id t-options]]
-        (let [{:keys [jsdoc] :as t-options} (merge t-options (get m schema-id))
-              literal (-parse-ast-node (->ast schema-id options)
-                                       (merge options
-                                              {:deref-types {schema-id true}
-                                               :file file
-                                               :t-options t-options}))
+      (fn [m schema-type-vector]
+        (let [[schema-id type-options] (if (seqable? schema-type-vector)
+                                         schema-type-vector
+                                         [schema-type-vector])
+              {:keys [jsdoc] :as type-options} (merge type-options (get m schema-id))
+              literal
+              (-parse-ast-node
+               (->ast schema-id options)
+               (merge options
+                      {:deref-type schema-id 
+                       :file file
+                       :t-options type-options}))
               jsdoc-literal
               (->> (concat jsdoc-default jsdoc)
-                   (map #(provide-jsdoc % schema-id t-options options))
+                   (map #(provide-jsdoc % schema-id type-options options))
                    -jsdoc-literal)]
           (-> m
               (assoc-in [schema-id :literal] literal)
@@ -303,20 +330,23 @@
   [file->schema-type-vectors
    {:keys [schema-id->type-options export-default files-import-alias* file-imports*]}]
   (reduce
-   (fn [[m-import m-type] [file scheva-type-vs]]
+   (fn [[m-import m-type] [file scheva-type-vectors]]
      [(assoc
        m-import file
        (map
         (fn [import-file]
           (import-literal
            (import-path-relative file import-file)
-           (get @files-import-alias* import-file)))
+           (get @files-import-alias* (or (:absolute import-file) import-file))))
         (get @file-imports* file)))
       (assoc
        m-type file
        (map
-        (fn [[schema-id _]]
-          (let [{:keys [t-name literal jsdoc-literal export] :as t-options}
+        (fn [schema-type-vector]
+          (let [[schema-id _] (if (seqable? schema-type-vector)
+                                schema-type-vector
+                                [schema-type-vector])
+                {:keys [t-name literal jsdoc-literal export] :as t-options}
                 (get schema-id->type-options schema-id)
                 t-name (or t-name
                            (munge (name schema-id)))]
@@ -324,8 +354,15 @@
              t-name literal jsdoc-literal
              (merge t-options
                     {:export (if (some? export) export export-default)}))))
-        scheva-type-vs))])
+        scheva-type-vectors))])
    [{} {}] file->schema-type-vectors))
+
+(m/=> parse-files
+      [:=>
+       [:catn
+        [:file->schema-type-vectors core-schemas/file->schema-type-vectors]
+        [:options core-schemas/assoc-literals-options]]
+       core-schemas/parse-files-return])
 
 (defn parse-files
   [file->schema-type-vectors options]
@@ -339,6 +376,9 @@
         schema-id->type-options
         (transform-parse-files-input-into-schema-id->type-options
          file->schema-type-vectors options)
+
+        ;; Normalize symbols to strings
+        files-import-alias (into {} (map (fn [[k v]] [(str k) (str v)]) files-import-alias))
 
         options (merge options {:schema-id->type-options schema-id->type-options
                                 :file-imports* (atom {})
@@ -355,7 +395,7 @@
         file-contents
         (reduce (fn [m [file]]
                   (assoc
-                   m file
+                   m (str file (if-not (re-matches #".*\.d\.ts$" file) ".d.ts" nil))
                    (let [import (string/join "\n" (get file->import-literals file))
                          types (string/join "\n" (get file->type-literals file))]
                      (str (if-not (string/blank? import) (str import "\n\n") nil)
@@ -379,7 +419,7 @@
          parse-files-arg (persistent!
                           (reduce
                            (fn [acc [k opts]]
-                             (let [file-name (str (csk/->snake_case (namespace k)) ".d.ts")]
+                             (let [file-name (csk/->snake_case (namespace k))]
                                (if-let [asdf (get acc file-name)]
                                  (assoc! acc file-name (conj asdf [k opts]))
                                  (assoc! acc file-name [[k opts]]))))
@@ -405,7 +445,10 @@
   ([type-name type-path type-import-alias]
    [any? {::external-type true
           ::t-name type-name
-          ::t-path type-path
+          ::t-path (cond
+                     (nil? type-path) nil
+                     (map? type-path) type-path
+                     :else {:absolute type-path})
           ::t-alias type-import-alias}])
   ([type-name type-path]
    (external-type type-name type-path nil))
