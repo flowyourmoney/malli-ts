@@ -115,6 +115,7 @@
 
    (declare to-clj')
 
+   ;; TODO: Try to use `#'bean/->val` to make this 'temporarily copying'
    (defn- into-clj-vec
      [data clj<->js-map]
      (let [length (js/goog.object.get data "length" 0)]

@@ -2,7 +2,8 @@
   (:require [cljs.test :as t :refer-macros [deftest is testing]]
             [malli-ts.core               :as-alias mts]
             [malli-ts.data-mapping :as sut]
-            [malli.core :as m]))
+            [malli.core :as m]
+            [cljs-bean.core :as b]))
 
 (def *registry
   (let [order-items-schema [:vector
@@ -88,7 +89,7 @@
 (defn- rand-amount [] (* (rand) 100))
 
 (deftest test-js-objs-to-clj
-  (let [item-count 2
+  (let [item-count 20
         js-objs    (-> (map
                         (fn [i]
                           #js {:modelType   ::order
@@ -128,6 +129,65 @@
                 (is (= (str "Dunno" i) (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related])))))
             clj-maps))))
 
+(deftest test-a-clj-map-to-js
+  (let [js-obj (sut/to-js *registry
+                          {:model-type   ::order
+                           :order-id     "a-test-id-1234"
+                           :order-type   "a-test-wf-type"
+                           :total-amount 23456.89
+                           :user         {:user-id "MrTesty"
+                                          :name    "Testy The QA"}
+                           :order-items  [{:order-item
+                                           {:type          "some-test-order-item-type-1"
+                                            :price         {:currency :EUR
+                                                            :amount   22.3}
+                                            :test-dummy    "TD-A1"
+                                            :related-items [{:how-is-related "Dunno"}]}}
+                                          {:order-item
+                                           {:type       "some-test-order-item-type-2"
+                                            :price      {:currency :ZAR
+                                                         :amount   898}
+                                            :test-dummy "TD-B2"}}]})]
+    (testing "`to-js` should map a string"
+      (is (= "a-test-id-1234" (-> js-obj .-orderId))))
+    (testing "`to-js` should map a number"
+      (is (= 23456.89 (-> js-obj .-totalAmount))))
+    (testing "`to-js` should map a value from a nested map"
+      (is (= "MrTesty" (-> js-obj .-user .-userId))))
+    (testing "`to-js` should map a value from a nested vector"
+      (is (= :EUR (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
+      (is (= :ZAR (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+    (testing "`to-js` should map a value to a property with a different name"
+      (is (= "TD-B2" (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+    (testing "`to-js` should map a value from a nested vector in a nested vector"
+      (is (= "Dunno" (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated))))))
+
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
+  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
+
+  (require '[cljs-bean.core :as b])
+
+  (let [item-count 20
+        js-objs    (-> (map
+                        (fn [i]
+                          #js {:modelType   ::order
+                               :orderId     (str "a-test-id-" i)
+                               :orderType   (str "a-test-wf-type" i)
+                               :totalAmount (rand-amount)
+                               :user        #js {:userId (str "MrTesty" i)
+                                                 :name   (str "Testy The QA" i)}
+                               :orderItems  #js [#js {:orderItem
+                                                      #js {:type         (str "some-test-order-item-type-A" i)
+                                                           :price        #js {:currency :EUR
+                                                                              :amount   (rand-amount)}
+                                                           :TESTDummyXYZ (str "TD-A" i)
+                                                           :relatedItems #js [#js {:howIsRelated (str "Dunno" i)}]}}
+                                                 #js {:orderItem
+                                                      #js {:type         (str "some-test-order-item-type-B" i)
+                                                           :price        #js {:currency :ZAR
+                                                                              :amount   (rand-amount)}
+                                                           :TESTDummyXYZ (str "TD-B" i) }}]}))
+                       (sut/into-js-array (range item-count)))]
+    (b/bean js-objs))
   )
