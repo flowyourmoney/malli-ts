@@ -71,7 +71,8 @@
                                                         #js {:type         "some-test-order-item-type-2"
                                                              :price        #js {:currency :ZAR
                                                                                 :amount   898}
-                                                             :TESTDummyXYZ "TD-B2"}}]})]
+                                                             :TESTDummyXYZ "TD-B2"}}]}
+                            :modelType)]
     (testing "`to-clj` should map a string"
       (is (= "a-test-id-1234" (:order-id clj-map))))
     (testing "`to-clj` should map a number"
@@ -110,7 +111,7 @@
                                                                               :amount   (rand-amount)}
                                                            :TESTDummyXYZ (str "TD-B" i) }}]}))
                        (sut/into-js-array (range item-count)))
-        clj-maps   (sut/to-clj *registry js-objs)]
+        clj-maps   (sut/to-clj *registry js-objs "modelType")]
     (doall (keep-indexed
             (fn [i clj-map]
               (testing "`to-clj` given an array, should map a string"
@@ -131,7 +132,7 @@
 
 (deftest test-a-clj-map-to-js
   (let [js-obj (sut/to-js *registry
-                          {:model-type   ::order
+                          {:schema-type  ::order
                            :order-id     "a-test-id-1234"
                            :order-type   "a-test-wf-type"
                            :total-amount 23456.89
@@ -162,9 +163,51 @@
     (testing "`to-js` should map a value from a nested vector in a nested vector"
       (is (= "Dunno" (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated))))))
 
+(deftest test-clj-maps-to-js
+  (let [item-count 20
+        clj-maps   (->> item-count
+                        range
+                        (mapv
+                         (fn [i]
+                           {:schema-type  ::order
+                            :order-id     (str "a-test-id-" i)
+                            :order-type   (str "a-test-wf-type" i)
+                            :total-amount (rand-amount)
+                            :user         {:user-id (str "MrTesty" i)
+                                           :name    (str "Testy The QA" i)}
+                            :order-items  [{:order-item
+                                            {:type          (str "some-test-order-item-type-A" i)
+                                             :price         {:currency :EUR
+                                                             :amount   (rand-amount)}
+                                             :test-dummy    (str "TD-A" i)
+                                             :related-items [{:how-is-related (str "Dunno" i)}]}}
+                                           {:order-item
+                                            {:type       (str "some-test-order-item-type-B" i)
+                                             :price      {:currency :ZAR
+                                                          :amount   (rand-amount)}
+                                             :test-dummy (str "TD-B" i) }}]})))
+        js-objs    (sut/to-js *registry clj-maps)]
+    (doall (keep-indexed
+            (fn [i js-obj]
+              (testing "`to-js` given a vector, should map a string"
+                (is (= (str "a-test-id-" i)
+                       (-> js-obj .-orderId))))
+              #_(testing "`to-clj` given an array, should map a number"
+                (is (number? (:total-amount clj-map))))
+              #_(testing "`to-clj` given an array, should map a value from a nested object"
+                (is (= (str "MrTesty" i) (get-in clj-map [:user :user-id]))))
+              #_(testing "`to-clj` given an array, should map a value from a nested array"
+                (is (= :EUR (get-in clj-map [:order-items 0 :order-item :price :currency])))
+                (is (= :ZAR (get-in clj-map [:order-items 1 :order-item :price :currency]))))
+              #_(testing "`to-clj` given an array, should map a value from a property with a different name"
+                (is (= (str "TD-B" i) (get-in clj-map [:order-items 1 :order-item :test-dummy]))))
+              #_(testing "`to-clj` given an array, should map a value from a nested array in a nested array"
+                (is (= (str "Dunno" i) (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related])))))
+            js-objs))))
+
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
-  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
+  (t/test-vars [#'malli-ts.data-mapping-test/test-clj-maps-to-js])
 
   (require '[cljs-bean.core :as b])
 

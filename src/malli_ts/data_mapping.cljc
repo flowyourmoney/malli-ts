@@ -10,11 +10,11 @@
      :cljs
      (:require
       [camel-snake-kebab.core :as csk]
-      [cljs-bean.core              :refer [bean bean? ->js ->clj]]
-      [clojure.set                 :as set]
-      [malli-ts.core               :as-alias mts]
-      [malli.core                  :as m]
-      [malli.util                  :as mu])))
+      [cljs-bean.core         :as b  :refer [bean bean? ->js ->clj]]
+      [clojure.set            :as set]
+      [malli-ts.core          :as-alias mts]
+      [malli.core             :as m]
+      [malli.util             :as mu])))
 
 (defn ancestors-path
   [clj->js-paths clj-path]
@@ -50,12 +50,14 @@
   [clj->js-paths key]
   (get clj->js-paths key))
 
+(def default-schema-type :schema-type)
+(def default-js-schema-type (csk/->camelCaseString default-schema-type))
+
 #?(:cljs
-   ;; TODO: Memoize/cache this
    (defn- clj<->js-key-mapping
-     [*schema-registry model-type]
-     (let [schema  (when model-type
-                     (get-schema *schema-registry model-type))
+     [*schema-registry schema-type]
+     (let [schema  (when schema-type
+                     (get-schema *schema-registry schema-type))
            *result (atom [])]
        (when schema
          (m/walk
@@ -72,7 +74,6 @@
                                                                    m/properties
                                                                    ::mts/clj<->js
                                                                    :prop)
-                                                          ;; TODO: Make this configurable
                                                           v    (or prop (csk/->camelCaseString key))]
                                                       (when v
                                                         [[(conj path key) v]
@@ -95,6 +96,8 @@
            {:clj->js-paths-keys clj->js-paths-keys
             :js->clj-paths-keys js->clj-paths-keys}))))
 
+   (def ^:private clj<->js-key-mapping-cached (memoize clj<->js-key-mapping))
+
    ;; js/Proxy is a strange creature, neither `type`
    ;; nor `instance?` works for it, probably because
    ;; a Proxy doesn't have `Proxy.prototype` & has
@@ -115,16 +118,14 @@
 
    (declare to-clj')
 
-   ;; TODO: Try to use `#'bean/->val` to make this 'temporarily copying'
    (defn- into-clj-vec
      [data clj<->js-map]
-     (let [length (js/goog.object.get data "length" 0)]
-       (-> (for [i (range length)]
-             (do
-               (-> data
-                   (aget i)
-                   (to-clj' clj<->js-map))))
-           vec)))
+     (let [{:keys [clj->js-paths-keys
+                   js->clj-paths-keys]}
+           clj<->js-map
+           fn-key->prop (partial key->prop clj->js-paths-keys)
+           fn-prop->key (partial prop->key js->clj-paths-keys)]
+       (#'b/->val data fn-prop->key fn-key->prop nil)))
 
    (defn- to-clj' [data clj<->js-map]
      (cond
@@ -144,14 +145,19 @@
        data))
 
    (defn ^:export to-clj
-     [*schema-registry data]
-     (let [obj          (if (and (array? data)
-                                 (>= (js/goog.object.get data "length" 0) 1))
-                          (aget data 0)
-                          data)
-           model-type   (js/goog.object.get obj "modelType" nil)
-           clj<->js-map (clj<->js-key-mapping *schema-registry model-type)]
-       (to-clj' data clj<->js-map)))
+     ([*schema-registry data]
+      (to-clj *schema-registry data default-js-schema-type))
+     ([*schema-registry data js-schema-type]
+      (let [str-js-schema-tp (if (keyword? js-schema-type)
+                               (name js-schema-type)
+                               js-schema-type)
+            obj              (if (and (array? data)
+                                      (>= (js/goog.object.get data "length" 0) 1))
+                               (aget data 0)
+                               data)
+            schema-type      (js/goog.object.get obj str-js-schema-tp nil)
+            clj<->js-map     (clj<->js-key-mapping-cached *schema-registry schema-type)]
+        (to-clj' data clj<->js-map))))
 
    (declare map-proxy)
 
@@ -177,20 +183,21 @@
          :else
          data)))
 
-   ;; TODO: Make model-type configurable
    (defn ^:export to-js
-     [*schema-registry data]
-     (let [is-coll    (or (sequential? data)
+     ([*schema-registry data]
+      (to-js *schema-registry data default-schema-type))
+     ([*schema-registry data schema-type]
+      (let [is-coll   (or (sequential? data)
                           (set? data))
-           model-type (if is-coll
+            schema-tp (if is-coll
                         (-> data
                             first
-                            :model-type)
-                        (:model-type data))
-           {:keys [js->clj-paths-keys]
-            :as   clj<->js-map}
-           (clj<->js-key-mapping *schema-registry model-type)]
-       (to-js' data js->clj-paths-keys)))
+                            schema-type)
+                        (schema-type data))
+            {:keys [js->clj-paths-keys]
+             :as   clj<->js-map}
+            (clj<->js-key-mapping-cached *schema-registry schema-tp)]
+        (to-js' data js->clj-paths-keys))))
 
    (defn- map-proxy-get
      [js->clj-paths-keys target key]
