@@ -40,7 +40,6 @@
       (-> schema (-schema-properties options) ::external-type)
       nil)
     :external-type
-
     (not (some? node)) :nil-node
     (:$ref node) :$ref
     (:type node) [:type (:type node)]

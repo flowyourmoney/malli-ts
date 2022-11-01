@@ -74,7 +74,6 @@
 
     :random.util.string/get-default-string-decoder
     [:=> :catn (mts/external-type "StringDecoder" :import-path "string_decoder" :schema some?)]
-
     ::answerUltimateQuestion [:=> :cat :random.dir.universe/answer-to-everything]
 
     :global/date (mts/external-type "Date" :schema inst?)
@@ -97,11 +96,10 @@
                                    [:timestamp inst?]]}})
          (parse-ns-schemas
           #{'user}
-          {:registry
-           {:date [inst? {::mts/external-type "Date"}]
-            :user/event [:map
-                         [:value any?]
-                         [:timestamp :date]]}})))
+          {:registry {:date [inst? {::mts/external-type "Date"}]
+                      :user/event [:map
+                                   [:value any?]
+                                   [:timestamp :date]]}})))
 
   (is (= {"malli_ts.ts.d.ts"
           "import * as crypto from 'crypto';\nimport * as random_dir_universe from './random/dir/universe.d.ts';\n\n/**\n * @schema [:=> [:catn [:s string?]] any?]\n */\nexport var k: (s:string) => any;\n/**\n * @schema [:=> [:catn [:s string?]] any?]\n */\nexport var sym: (s:string) => any;\n/**\n * @schema [:=> [:catn [:o any?]] any?]\n */\nexport var to_clj: (o:any) => any;\n/**\n * @schema [:=> [:catn [:schema any?] [:val any?]] any?]\n */\nexport var validate: (schema:any, val:any) => any;\n/**\n * @schema [:=> :cat :random.dir.universe/answer-to-everything]\n */\nexport var answer_ultimate_question: () => random_dir_universe.answerToEverything;\n/**\n * @schema [:=> :cat :global/date]\n */\nexport var now: () => Date;\n/**\n * @schema [:=> [:catn [:s string?]] :crypto/hash]\n */\nexport var toSha256: (s:string) => crypto.Hash;",
