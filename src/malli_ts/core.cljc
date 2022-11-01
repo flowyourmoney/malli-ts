@@ -78,6 +78,7 @@
 (defmethod -parse-ast-node [:type :number] [_ _] "number")
 (defmethod -parse-ast-node [:type :string] [_ _] "string")
 (defmethod -parse-ast-node [:type :boolean] [_ _] "boolean")
+(defmethod -parse-ast-node [:type :date] [_ _] "Date")
 (defmethod -parse-ast-node [:type :any] [_ _] "any")
 (defmethod -parse-ast-node [:type :undefined] [_ _] "undefined")
 (defmethod -parse-ast-node :const [{:keys [const]} options]

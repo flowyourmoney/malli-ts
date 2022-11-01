@@ -48,7 +48,7 @@
 (defmethod parse-schema-node 'uuid? [_ _ _ _] {:type :string})
 (defmethod parse-schema-node 'uri? [_ _ _ _] {:type :string})
 (defmethod parse-schema-node 'decimal? [_ _ _ _] {:type :number})
-(defmethod parse-schema-node 'inst? [_ _ _ _] {:type :string})
+(defmethod parse-schema-node 'inst? [_ _ _ _] {:type :date})
 (defmethod parse-schema-node 'seqable? [_ _ _ _] {:type :array})
 (defmethod parse-schema-node 'indexed? [_ _ _ _] {:type :array})
 (defmethod parse-schema-node 'map? [_ _ _ _] {:type :object})
