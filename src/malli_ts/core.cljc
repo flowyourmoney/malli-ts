@@ -24,10 +24,22 @@
                   p2 (get-path f2)]
               (str "./"  (.relativize p1 p2))))))
 
+(defn- -schema-properties
+  [?schema options]
+  (if ?schema
+    (-> (if (= (m/type ?schema options) ::m/val)
+          (-> ?schema (m/children options) first)
+          ?schema)
+        (m/properties options))
+    nil))
+
 (defn- -dispatch-parse-ast-node
   [node options]
   (cond
-    (some-> node :schema (m/properties options) ::external-type) :external-type
+    (if-let [{:keys [schema]} node]
+      (-> schema (-schema-properties options) ::external-type)
+      nil)
+    :external-type
     (not (some? node)) :nil-node
     (:$ref node) :$ref
     (:type node) [:type (:type node)]
@@ -141,10 +153,14 @@
                                                    file
                                                    files-import-alias*
                                                    file-imports*
-                                                   schema-id->type-options]}]
-  (let [{:keys [::t-name ::t-path ::t-alias]} (m/properties schema)
-        {:keys [t-name t-path t-alias]
-         :or {t-name t-name t-path t-path t-alias t-alias}} (get schema-id->type-options deref-type)
+                                                   schema-id->type-options]
+                                            :as options}]
+  (let [{:keys [::external-type ::t-path ::t-alias]} (-schema-properties schema options)
+
+        {:keys [external-type t-path t-alias]
+         :or {external-type external-type t-path t-path t-alias t-alias}}
+        (get schema-id->type-options deref-type)
+
         t-path-str (or (:absolute t-path) t-path)
         is-imported-already (if t-path-str (@file-imports* t-path) nil)
         canonical-alias (if t-path-str (get @files-import-alias* t-path-str) nil)
@@ -161,7 +177,7 @@
       (swap! file-imports* update file set/union #{t-path}))
     (when (and import-alias (not canonical-alias))
       (swap! files-import-alias* assoc t-path-str import-alias))
-    (str (if import-alias (str import-alias ".") nil) t-name)))
+    (str (if import-alias (str import-alias ".") nil) external-type)))
 
 (defn- letter-args
   ([letter-arg]
@@ -305,7 +321,7 @@
               (-parse-ast-node
                (->ast schema-id options)
                (merge options
-                      {:deref-type schema-id 
+                      {:deref-type schema-id
                        :file file
                        :t-options type-options}))
               jsdoc-literal
@@ -443,15 +459,13 @@
    (parse-ns-schemas ns-coll {})))
 
 (defn external-type
-  ([type-name type-path type-import-alias]
-   [any? {::external-type true
-          ::t-name type-name
-          ::t-path (cond
-                     (nil? type-path) nil
-                     (map? type-path) type-path
-                     :else {:absolute type-path})
-          ::t-alias type-import-alias}])
-  ([type-name type-path]
-   (external-type type-name type-path nil))
-  ([type-name]
-   (external-type type-name nil nil)))
+  [external-type-name & {:keys [import-path import-alias type-name schema]}]
+  (letfn [(?assoc [m k v] (if v (assoc m k v) m))]
+    [(or schema any?)
+     (-> (?assoc {} ::external-type external-type-name)
+         (?assoc ::t-name type-name)
+         (?assoc ::t-path (cond
+                            (nil? import-path) nil
+                            (map? import-path) import-path
+                            :else {:absolute import-path}))
+         (?assoc ::t-alias import-alias))]))
