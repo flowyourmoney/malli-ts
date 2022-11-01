@@ -89,6 +89,13 @@
   (parse-ns-schemas parse-ns-schemas-data parse-files-options))
 
 (deftest parsing
+  (is (= {"user.d.ts" "type event = {\"value\":any,\"timestamp\":Date};"}
+         (parse-ns-schemas
+          #{'user}
+          {:registry {:user/event [:map
+                                   [:value any?]
+                                   [:timestamp inst?]]}})))
+
   (is (= {"malli_ts.ts.d.ts"
           "import * as crypto from 'crypto';\nimport * as random_dir_universe from './random/dir/universe.d.ts';\n\n/**\n * @schema [:=> [:catn [:s string?]] any?]\n */\nexport var k: (s:string) => any;\n/**\n * @schema [:=> [:catn [:s string?]] any?]\n */\nexport var sym: (s:string) => any;\n/**\n * @schema [:=> [:catn [:o any?]] any?]\n */\nexport var to_clj: (o:any) => any;\n/**\n * @schema [:=> [:catn [:schema any?] [:val any?]] any?]\n */\nexport var validate: (schema:any, val:any) => any;\n/**\n * @schema [:=> :cat :random.dir.universe/answer-to-everything]\n */\nexport var answer_ultimate_question: () => random_dir_universe.answerToEverything;\n/**\n * @schema [:=> :cat :global/date]\n */\nexport var now: () => Date;\n/**\n * @schema [:=> [:catn [:s string?]] :crypto/hash]\n */\nexport var toSha256: (s:string) => crypto.Hash;",
           "random/dir/universe.d.ts"
