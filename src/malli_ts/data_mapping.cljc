@@ -122,6 +122,8 @@
             clj<->js-map     (clj<->js-key-mapping-cached *schema-registry schema-type)]
         (to-clj' data clj<->js-map))))
 
+   (def ^:export toClj to-clj)
+
    (declare map-proxy)
 
    (defn- array-push

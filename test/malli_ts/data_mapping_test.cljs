@@ -209,10 +209,4 @@
   (t/run-tests 'malli-ts.data-mapping-test)
   (t/test-vars [#'malli-ts.data-mapping-test/test-clj-maps-to-js])
 
-  (require '[cljs-bean.core :as b])
-
-  (b/->js {:something.is.going/on :yup})
-
-  (b/->clj #js {"on" "yup"})
-
 )
