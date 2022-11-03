@@ -192,17 +192,17 @@
               (testing "`to-js` given a vector, should map a string"
                 (is (= (str "a-test-id-" i)
                        (-> js-obj .-orderId))))
-              #_(testing "`to-clj` given an array, should map a number"
-                (is (number? (:total-amount clj-map))))
-              #_(testing "`to-clj` given an array, should map a value from a nested object"
-                (is (= (str "MrTesty" i) (get-in clj-map [:user :user-id]))))
-              #_(testing "`to-clj` given an array, should map a value from a nested array"
-                (is (= :EUR (get-in clj-map [:order-items 0 :order-item :price :currency])))
-                (is (= :ZAR (get-in clj-map [:order-items 1 :order-item :price :currency]))))
-              #_(testing "`to-clj` given an array, should map a value from a property with a different name"
-                (is (= (str "TD-B" i) (get-in clj-map [:order-items 1 :order-item :test-dummy]))))
-              #_(testing "`to-clj` given an array, should map a value from a nested array in a nested array"
-                (is (= (str "Dunno" i) (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related])))))
+              (testing "`to-js` given a vector, should map a number"
+                (is (number? (-> js-obj .-totalAmount))))
+              (testing "`to-js` given a vector, should map a value from a nested map"
+                (is (= (str "MrTesty" i) (-> js-obj .-user .-userId))))
+              (testing "`to-js` given a vector, should map a value from a nested verctor"
+                (is (= :EUR (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
+                (is (= :ZAR (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+              (testing "`to-js` given a vector, should map a value to a property with a different name"
+                (is (= (str "TD-B" i) (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+              (testing "`to-js` given a vector, should map a value from a nested vector in a nested vector"
+                (is (= (str "Dunno" i) (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated)))))
             js-objs))))
 
 (comment
@@ -211,26 +211,8 @@
 
   (require '[cljs-bean.core :as b])
 
-  (let [item-count 20
-        js-objs    (-> (map
-                        (fn [i]
-                          #js {:modelType   ::order
-                               :orderId     (str "a-test-id-" i)
-                               :orderType   (str "a-test-wf-type" i)
-                               :totalAmount (rand-amount)
-                               :user        #js {:userId (str "MrTesty" i)
-                                                 :name   (str "Testy The QA" i)}
-                               :orderItems  #js [#js {:orderItem
-                                                      #js {:type         (str "some-test-order-item-type-A" i)
-                                                           :price        #js {:currency :EUR
-                                                                              :amount   (rand-amount)}
-                                                           :TESTDummyXYZ (str "TD-A" i)
-                                                           :relatedItems #js [#js {:howIsRelated (str "Dunno" i)}]}}
-                                                 #js {:orderItem
-                                                      #js {:type         (str "some-test-order-item-type-B" i)
-                                                           :price        #js {:currency :ZAR
-                                                                              :amount   (rand-amount)}
-                                                           :TESTDummyXYZ (str "TD-B" i) }}]}))
-                       (sut/into-js-array (range item-count)))]
-    (b/bean js-objs))
-  )
+  (b/->js {:something.is.going/on :yup})
+
+  (b/->clj #js {"on" "yup"})
+
+)

@@ -1,40 +1,13 @@
 (ns malli-ts.data-mapping
-  #?(:clj
-     (:require
-      [camel-snake-kebab.core :as csk]
-      [clojure.set                 :as set]
-      [malli-ts.core               :as-alias mts]
-      [malli.core                  :as m]
-      [malli.util                  :as mu]
-      [mn.flow.domain.core.schemas :as schemas])
-     :cljs
-     (:require
-      [camel-snake-kebab.core :as csk]
-      [cljs-bean.core         :as b  :refer [bean bean? ->js ->clj]]
-      [clojure.set            :as set]
-      [malli-ts.core          :as-alias mts]
-      [malli.core             :as m]
-      [malli.util             :as mu])))
-
-(defn ancestors-path
-  [clj->js-paths clj-path]
-  (loop [js-path          []
-         clj-path-segment clj-path]
-    (let [path      (-> clj-path-segment
-                        butlast
-                        vec)
-          last-step (peek path)]
-      (if-not last-step
-        (-> js-path
-            reverse
-            vec)
-        (if (= ::m/in last-step)
-          (recur
-           (conj js-path last-step)
-           path)
-          (recur
-           (conj js-path (get clj->js-paths path))
-           path))))))
+  (:require
+   [camel-snake-kebab.core :as csk]
+   [clojure.set            :as set]
+   [malli-ts.core          :as-alias mts]
+   [malli.core             :as m]
+   [malli.util             :as mu])
+  #?(:cljs 
+     (:require 
+      [cljs-bean.core :as b :refer [bean bean? ->js ->clj]])))
 
 (defn get-schema
   [*schema-registry schema]
@@ -43,88 +16,78 @@
       (mu/get-in [0])))
 
 (defn prop->key
-  [js->clj-paths prop]
-  (get js->clj-paths prop))
+  [js-props->clj-keys prop]
+  (get js-props->clj-keys prop))
 
 (defn key->prop
-  [clj->js-paths key]
-  (get clj->js-paths key))
+  [clj-keys->js-props key]
+  (get clj-keys->js-props key))
 
 (def default-schema-type :schema-type)
 (def default-js-schema-type (csk/->camelCaseString default-schema-type))
 
+(defn- clj<->js-key-mapping
+  [*schema-registry schema-type]
+  (let [schema  (when schema-type
+                  (get-schema *schema-registry schema-type))
+        *result (atom [])]
+    (when schema
+      (m/walk
+       schema
+       (fn [schema _path _children _options]
+         (when (= :map (m/type schema))
+           (let [clj-keys->js-props (->> schema
+                                         m/entries
+                                         (map #(let [key  (key %)
+                                                     s    (-> %
+                                                              val
+                                                              m/schema)
+                                                     prop (-> s
+                                                              m/properties
+                                                              ::mts/clj<->js
+                                                              :prop)
+                                                     v    (or prop (csk/->camelCaseString key))]
+                                                 (when v
+                                                   [key v])))
+                                         (remove nil?))]
+             (when (seq clj-keys->js-props)
+               (swap! *result concat clj-keys->js-props))))
+         schema))
+      (let [clj-keys->js-props (into {} @*result)
+            js-props->clj-keys (set/map-invert clj-keys->js-props)]
+        {:clj-keys->js-props clj-keys->js-props
+         :js-props->clj-keys js-props->clj-keys}))))
+
+(def ^:private clj<->js-key-mapping-cached (memoize clj<->js-key-mapping))
+
+;; js/Proxy is a strange creature, neither `type`
+;; nor `instance?` works for it, probably because
+;; a Proxy doesn't have `Proxy.prototype` & has
+;; transparent virtualization.
+(defprotocol IJsProxy)
+(deftype JsProxy []
+  IJsProxy)
+
 #?(:cljs
-   (defn- clj<->js-key-mapping
-     [*schema-registry schema-type]
-     (let [schema  (when schema-type
-                     (get-schema *schema-registry schema-type))
-           *result (atom [])]
-       (when schema
-         (m/walk
-          schema
-          (fn [schema path _children _options]
-            (when (= :map (m/type schema))
-              (let [clj-path->js-path (->> schema
-                                           m/entries
-                                           (mapcat #(let [key  (key %)
-                                                          s    (-> %
-                                                                   val
-                                                                   m/schema)
-                                                          prop (-> s
-                                                                   m/properties
-                                                                   ::mts/clj<->js
-                                                                   :prop)
-                                                          v    (or prop (csk/->camelCaseString key))]
-                                                      (when v
-                                                        [[(conj path key) v]
-                                                         [key v]])))
-                                           (remove nil?))]
-                (when (seq clj-path->js-path)
-                  (swap! *result concat clj-path->js-path))))
-            schema))
-         (let [clj->js-paths-keys (into {} @*result)
-               clj->js-paths-keys (->> @*result
-                                       (map (fn [[clj-path ts-prop]]
-                                              (if (sequential? clj-path)
-                                                (let [ap (ancestors-path
-                                                          clj->js-paths-keys
-                                                          clj-path)]
-                                                  [clj-path (conj ap ts-prop)])
-                                                [clj-path ts-prop])))
-                                       (into {}))
-               js->clj-paths-keys (set/map-invert clj->js-paths-keys)]
-           {:clj->js-paths-keys clj->js-paths-keys
-            :js->clj-paths-keys js->clj-paths-keys}))))
-
-   (def ^:private clj<->js-key-mapping-cached (memoize clj<->js-key-mapping))
-
-   ;; js/Proxy is a strange creature, neither `type`
-   ;; nor `instance?` works for it, probably because
-   ;; a Proxy doesn't have `Proxy.prototype` & has
-   ;; transparent virtualization.
-   (defprotocol IJsProxy)
-   (deftype JsProxy []
-     IJsProxy)
-
    (defn- map-bean
      [obj clj<->js-map]
      (when clj<->js-map
-       (let [{:keys [clj->js-paths-keys
-                     js->clj-paths-keys]}
+       (let [{:keys [clj-keys->js-props
+                     js-props->clj-keys]}
              clj<->js-map
-             fn-key->prop (partial key->prop clj->js-paths-keys)
-             fn-prop->key (partial prop->key js->clj-paths-keys)]
+             fn-key->prop (partial key->prop clj-keys->js-props)
+             fn-prop->key (partial prop->key js-props->clj-keys)]
          (bean obj :prop->key fn-prop->key :key->prop fn-key->prop :recursive true))))
 
    (declare to-clj')
 
    (defn- into-clj-vec
      [data clj<->js-map]
-     (let [{:keys [clj->js-paths-keys
-                   js->clj-paths-keys]}
+     (let [{:keys [clj-keys->js-props
+                   js-props->clj-keys]}
            clj<->js-map
-           fn-key->prop (partial key->prop clj->js-paths-keys)
-           fn-prop->key (partial prop->key js->clj-paths-keys)]
+           fn-key->prop (partial key->prop clj-keys->js-props)
+           fn-prop->key (partial prop->key js-props->clj-keys)]
        (#'b/->val data fn-prop->key fn-key->prop nil)))
 
    (defn- to-clj' [data clj<->js-map]
@@ -170,15 +133,15 @@
      (transduce xform array-push (array) from))
 
    (defn- to-js'
-     [data js->clj-paths-keys]
-     (when js->clj-paths-keys
+     [data js-props->clj-keys]
+     (when js-props->clj-keys
        (cond
          (or (sequential? data)
              (set? data))
-         (into-js-array (map #(to-js' % js->clj-paths-keys)) data)
+         (into-js-array (map #(to-js' % js-props->clj-keys)) data)
 
          (associative? data)
-         (map-proxy data js->clj-paths-keys)
+         (map-proxy data js-props->clj-keys)
 
          :else
          data)))
@@ -194,103 +157,28 @@
                             first
                             schema-type)
                         (schema-type data))
-            {:keys [js->clj-paths-keys]
+            {:keys [js-props->clj-keys]
              :as   clj<->js-map}
             (clj<->js-key-mapping-cached *schema-registry schema-tp)]
-        (to-js' data js->clj-paths-keys))))
+        (to-js' data js-props->clj-keys))))
 
    (defn- map-proxy-get
-     [js->clj-paths-keys target key]
+     [js-props->clj-keys target key]
      (case key
        "unwrap/clj" target
 
-       (-> js->clj-paths-keys
+       (-> js-props->clj-keys
            (get key)
            (as-> k (get target k))
-           (to-js' js->clj-paths-keys))))
+           (to-js' js-props->clj-keys))))
 
    (defn- map-proxy
-     [data js->clj-paths-keys]
+     [data js-props->clj-keys]
      (if (instance? JsProxy data)
        data
        (js/Proxy. data
                   #js
-                  {:get            (partial map-proxy-get js->clj-paths-keys)
+                  {:get            (partial map-proxy-get js-props->clj-keys)
                    :getPrototypeOf (fn [k]
                                      (.-prototype JsProxy))})))
-
-   (comment
-     (let [next-act-schema [:vector
-                            [:map
-                             [:activity {:optional      true
-                                         ::mts/clj<->js {:prop    "activity"
-                                                         :fn-to   nil
-                                                         :fn-from nil}}
-                              [:map
-                               [:type {::mts/clj<->js {:prop "type"}}
-                                string?]
-                               [:args any?]
-                               [:test-dummy {::mts/clj<->js {:prop "testDummy"}}
-                                string?]]]
-                             [:sleep {:optional true}
-                              [:map
-                               [:timespan [:enum :milliseconds :seconds :minutes :hours :days]]
-                               [:length int?]]]]]
-           wf-exec-schema  [:map
-                            [:model-type [:= ::workflow-exec]]
-                            [:workflow-exec-id {::mts/clj<->js {:prop    "workflowExecId"
-                                                                :fn-to   nil
-                                                                :fn-from nil}}
-                             string?]
-                            [:workflow-type {::mts/clj<->js {:prop    "workflowType"
-                                                             :fn-to   nil
-                                                             :fn-from nil}}
-                             [:or keyword? string?]]
-                            [:next-activities {:optional      true
-                                               ::mts/clj<->js {:prop "nextActivities"}}
-                             next-act-schema]
-                            [:state {:optional true}
-                             any?]
-                            [:user-id {:optional true}
-                             string?]
-                            [:events map?]
-                            [:event-log any?]]
-           s               [:schema {::mts/t-name  "WorkflowExec"
-                                     ::mts/declare true}
-                            wf-exec-schema]
-           *registry       (atom (m/default-schemas))
-           _               (swap! *registry assoc ::workflow-exec (m/schema s))
-           clj-map         (to-clj *registry
-                                   #js [#js
-                                        {:modelType      ::workflow-exec
-                                         :workflowExecId "a-test-id-1234"
-                                         :workflowType   "a-test-wf-type"
-                                         :nextActivities #js
-                                         [#js
-                                          {:activity #js
-                                           {:type      "some-test-activity-type-1"
-                                            :args      {:arg1 "dddd"
-                                                        :arg2 22.3}
-                                            :testDummy "dhjhjhdjhjd"}}]}])
-           js-obj          (to-js *registry
-                                  {:model-type       ::workflow-exec
-                                   :workflow-exec-id "a-test-id-1234"
-                                   :workflow-type    "a-test-wf-type"
-                                   :next-activities  [{:activity
-                                                       {:type       "some-test-activity-type-1"
-                                                        :args       {:arg1 "dddd"
-                                                                     :arg2 22.3}
-                                                        :test-dummy "dhjhjhdjhjd"}}]})]
-       #_(get-in clj-map [0 :next-activities 0 :activity :test-dummy])
-       clj-map
-       #_(-> js-obj
-           .-nextActivities
-           (aget 0)
-           .-activity
-           .-testDummy))
-
-
-     )
-
-
-   )
+)

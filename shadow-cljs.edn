@@ -1,4 +1,4 @@
-{:source-paths ["src" "development" "tests"]
+{:source-paths ["src" "development" "test"]
 
  :dependencies
  [[metosin/malli "0.5.0"]
@@ -14,8 +14,8 @@
   :test
   {:target :node-test
    :output-to "out/test.js"
-   :ns-regexp "tests\\."
-   :test-dir "tests"
+   :ns-regexp "test$"
+   :test-dir "test"
    :autorun true}
   
   :malli-ts.ts
