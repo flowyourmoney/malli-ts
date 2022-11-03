@@ -5,8 +5,8 @@
    [malli-ts.core          :as-alias mts]
    [malli.core             :as m]
    [malli.util             :as mu])
-  #?(:cljs 
-     (:require 
+  #?(:cljs
+     (:require
       [cljs-bean.core :as b :refer [bean bean? ->js ->clj]])))
 
 (defn get-schema
@@ -23,40 +23,45 @@
   [clj-keys->js-props key]
   (get clj-keys->js-props key))
 
-(def default-schema-type :schema-type)
-(def default-js-schema-type (csk/->camelCaseString default-schema-type))
+(def default-get-schema-name :schema)
+
+;; TODO: Change to function
+(def default-js-schema-type
+  (csk/->camelCaseString default-get-schema-name))
 
 (defn- clj<->js-key-mapping
-  [*schema-registry schema-type]
-  (let [schema  (when schema-type
-                  (get-schema *schema-registry schema-type))
-        *result (atom [])]
-    (when schema
-      (m/walk
-       schema
-       (fn [schema _path _children _options]
-         (when (= :map (m/type schema))
-           (let [clj-keys->js-props (->> schema
-                                         m/entries
-                                         (map #(let [key  (key %)
-                                                     s    (-> %
-                                                              val
-                                                              m/schema)
-                                                     prop (-> s
-                                                              m/properties
-                                                              ::mts/clj<->js
-                                                              :prop)
-                                                     v    (or prop (csk/->camelCaseString key))]
-                                                 (when v
-                                                   [key v])))
-                                         (remove nil?))]
-             (when (seq clj-keys->js-props)
-               (swap! *result concat clj-keys->js-props))))
-         schema))
-      (let [clj-keys->js-props (into {} @*result)
-            js-props->clj-keys (set/map-invert clj-keys->js-props)]
-        {:clj-keys->js-props clj-keys->js-props
-         :js-props->clj-keys js-props->clj-keys}))))
+  ([*registry schema-name]
+   (let [schema (when schema-name
+                  (get-schema *registry schema-name))]
+     (clj<->js-key-mapping schema)))
+  ([schema]
+   (let [*result (atom [])]
+     (when schema
+       (m/walk
+        schema
+        (fn [schema _path _children _options]
+          (when (= :map (m/type schema))
+            (let [clj-keys->js-props (->> schema
+                                          m/entries
+                                          (map #(let [key  (key %)
+                                                      s    (-> %
+                                                               val
+                                                               m/schema)
+                                                      prop (-> s
+                                                               m/properties
+                                                               ::mts/clj<->js
+                                                               :prop)
+                                                      v    (or prop (csk/->camelCaseString key))]
+                                                  (when v
+                                                    [key v])))
+                                          (remove nil?))]
+              (when (seq clj-keys->js-props)
+                (swap! *result concat clj-keys->js-props))))
+          schema))
+       (let [clj-keys->js-props (into {} @*result)
+             js-props->clj-keys (set/map-invert clj-keys->js-props)]
+         {:clj-keys->js-props clj-keys->js-props
+          :js-props->clj-keys js-props->clj-keys})))))
 
 (def ^:private clj<->js-key-mapping-cached (memoize clj<->js-key-mapping))
 
@@ -149,20 +154,28 @@
          data)))
 
    (defn ^:export to-js
-     ([*schema-registry data]
-      (to-js *schema-registry data default-schema-type))
-     ([*schema-registry data schema-type]
-      (let [is-coll   (or (sequential? data)
-                          (set? data))
-            schema-tp (if is-coll
-                        (-> data
-                            first
-                            schema-type)
-                        (schema-type data))
-            {:keys [js-props->clj-keys]
-             :as   clj<->js-map}
-            (clj<->js-key-mapping-cached *schema-registry schema-tp)]
-        (to-js' data js-props->clj-keys))))
+     [data & {:keys [registry get-schema-name]
+              :as   schema}]
+     (cond
+       (m/schema? schema)
+       , (let [{:keys [js-props->clj-keys]} (clj<->js-key-mapping-cached
+                                             schema)]
+           (to-js' data js-props->clj-keys))
+
+       (and registry get-schema-name)
+       , (let [is-coll   (or (sequential? data)
+                             (set? data))
+               schema-nm (if is-coll
+                           (-> data
+                               first
+                               get-schema-name)
+                           (get-schema-name data))
+               {:keys [js-props->clj-keys]}
+               (clj<->js-key-mapping-cached registry schema-nm)]
+           (to-js' data js-props->clj-keys))
+
+       :else
+       , (to-js data :registry registry :get-schema-name default-get-schema-name)))
 
    (defn- map-proxy-get
      [js-props->clj-keys target key]
@@ -183,4 +196,4 @@
                   {:get            (partial map-proxy-get js-props->clj-keys)
                    :getPrototypeOf (fn [k]
                                      (.-prototype JsProxy))})))
-)
+   )

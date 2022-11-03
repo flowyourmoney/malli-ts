@@ -93,7 +93,7 @@
   (let [item-count 20
         js-objs    (-> (map
                         (fn [i]
-                          #js {:modelType   ::order
+                          #js {:schema      ::order
                                :orderId     (str "a-test-id-" i)
                                :orderType   (str "a-test-wf-type" i)
                                :totalAmount (rand-amount)
@@ -131,8 +131,7 @@
             clj-maps))))
 
 (deftest test-a-clj-map-to-js
-  (let [js-obj (sut/to-js *registry
-                          {:schema-type  ::order
+  (let [js-obj (sut/to-js {:schema       ::order
                            :order-id     "a-test-id-1234"
                            :order-type   "a-test-wf-type"
                            :total-amount 23456.89
@@ -148,7 +147,8 @@
                                            {:type       "some-test-order-item-type-2"
                                             :price      {:currency :ZAR
                                                          :amount   898}
-                                            :test-dummy "TD-B2"}}]})]
+                                            :test-dummy "TD-B2"}}]}
+                          :registry *registry)]
     (testing "`to-js` should map a string"
       (is (= "a-test-id-1234" (-> js-obj .-orderId))))
     (testing "`to-js` should map a number"
@@ -169,7 +169,7 @@
                         range
                         (mapv
                          (fn [i]
-                           {:schema-type  ::order
+                           {:schema       ::order
                             :order-id     (str "a-test-id-" i)
                             :order-type   (str "a-test-wf-type" i)
                             :total-amount (rand-amount)
@@ -207,6 +207,6 @@
 
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
-  (t/test-vars [#'malli-ts.data-mapping-test/test-clj-maps-to-js])
+  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
 
 )
