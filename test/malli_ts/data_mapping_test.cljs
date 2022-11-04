@@ -54,25 +54,26 @@
     *r))
 
 (deftest test-a-js-obj-to-clj
-  (let [clj-map (sut/to-clj *registry
-                            #js {:modelType   ::order
-                                 :orderId     "a-test-id-1234"
-                                 :orderType   "a-test-wf-type"
-                                 :totalAmount 23456.89
-                                 :user        #js {:userId "MrTesty"
-                                                   :name   "Testy The QA"}
-                                 :orderItems  #js [#js {:orderItem
-                                                        #js {:type         "some-test-order-item-type-1"
-                                                             :price        #js {:currency :EUR
-                                                                                :amount   22.3}
-                                                             :TESTDummyXYZ "TD-A1"
-                                                             :relatedItems #js [#js {:howIsRelated "Dunno"}]}}
-                                                   #js {:orderItem
-                                                        #js {:type         "some-test-order-item-type-2"
-                                                             :price        #js {:currency :ZAR
-                                                                                :amount   898}
-                                                             :TESTDummyXYZ "TD-B2"}}]}
-                            :modelType)]
+  (let [clj-map (sut/to-clj
+                 #js {:modelType   ::order
+                      :orderId     "a-test-id-1234"
+                      :orderType   "a-test-wf-type"
+                      :totalAmount 23456.89
+                      :user        #js {:userId "MrTesty"
+                                        :name   "Testy The QA"}
+                      :orderItems  #js [#js {:orderItem
+                                             #js {:type         "some-test-order-item-type-1"
+                                                  :price        #js {:currency :EUR
+                                                                     :amount   22.3}
+                                                  :TESTDummyXYZ "TD-A1"
+                                                  :relatedItems #js [#js {:howIsRelated "Dunno"}]}}
+                                        #js {:orderItem
+                                             #js {:type         "some-test-order-item-type-2"
+                                                  :price        #js {:currency :ZAR
+                                                                     :amount   898}
+                                                  :TESTDummyXYZ "TD-B2"}}]}
+                 :registry *registry
+                 :get-schema-name :modelType)]
     (testing "`to-clj` should map a string"
       (is (= "a-test-id-1234" (:order-id clj-map))))
     (testing "`to-clj` should map a number"
@@ -93,7 +94,7 @@
   (let [item-count 20
         js-objs    (-> (map
                         (fn [i]
-                          #js {:schema      ::order
+                          #js {:modelType   ::order
                                :orderId     (str "a-test-id-" i)
                                :orderType   (str "a-test-wf-type" i)
                                :totalAmount (rand-amount)
@@ -111,7 +112,7 @@
                                                                               :amount   (rand-amount)}
                                                            :TESTDummyXYZ (str "TD-B" i) }}]}))
                        (sut/into-js-array (range item-count)))
-        clj-maps   (sut/to-clj *registry js-objs "modelType")]
+        clj-maps   (sut/to-clj js-objs :registry *registry :get-schema-name "modelType")]
     (doall (keep-indexed
             (fn [i clj-map]
               (testing "`to-clj` given an array, should map a string"
@@ -186,7 +187,7 @@
                                              :price      {:currency :ZAR
                                                           :amount   (rand-amount)}
                                              :test-dummy (str "TD-B" i) }}]})))
-        js-objs    (sut/to-js *registry clj-maps)]
+        js-objs    (sut/to-js clj-maps :registry *registry)]
     (doall (keep-indexed
             (fn [i js-obj]
               (testing "`to-js` given a vector, should map a string"
@@ -205,8 +206,76 @@
                 (is (= (str "Dunno" i) (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated)))))
             js-objs))))
 
+(deftest test-directly-passing-schema-to-js
+  (let [js-obj (sut/to-js {:schema       ::order
+                           :order-id     "a-test-id-1234"
+                           :order-type   "a-test-wf-type"
+                           :total-amount 23456.89
+                           :user         {:user-id "MrTesty"
+                                          :name    "Testy The QA"}
+                           :order-items  [{:order-item
+                                           {:type          "some-test-order-item-type-1"
+                                            :price         {:currency :EUR
+                                                            :amount   22.3}
+                                            :test-dummy    "TD-A1"
+                                            :related-items [{:how-is-related "Dunno"}]}}
+                                          {:order-item
+                                           {:type       "some-test-order-item-type-2"
+                                            :price      {:currency :ZAR
+                                                         :amount   898}
+                                            :test-dummy "TD-B2"}}]}
+                          (::order @*registry))]
+    (testing "`to-js` should map a string"
+      (is (= "a-test-id-1234" (-> js-obj .-orderId))))
+    (testing "`to-js` should map a number"
+      (is (= 23456.89 (-> js-obj .-totalAmount))))
+    (testing "`to-js` should map a value from a nested map"
+      (is (= "MrTesty" (-> js-obj .-user .-userId))))
+    (testing "`to-js` should map a value from a nested vector"
+      (is (= :EUR (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
+      (is (= :ZAR (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+    (testing "`to-js` should map a value to a property with a different name"
+      (is (= "TD-B2" (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+    (testing "`to-js` should map a value from a nested vector in a nested vector"
+      (is (= "Dunno" (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated))))))
+
+(deftest test-directly-passing-schema-to-clj
+  (let [clj-map (sut/to-clj
+                 #js {:modelType   ::order
+                      :orderId     "a-test-id-1234"
+                      :orderType   "a-test-wf-type"
+                      :totalAmount 23456.89
+                      :user        #js {:userId "MrTesty"
+                                        :name   "Testy The QA"}
+                      :orderItems  #js [#js {:orderItem
+                                             #js {:type         "some-test-order-item-type-1"
+                                                  :price        #js {:currency :EUR
+                                                                     :amount   22.3}
+                                                  :TESTDummyXYZ "TD-A1"
+                                                  :relatedItems #js [#js {:howIsRelated "Dunno"}]}}
+                                        #js {:orderItem
+                                             #js {:type         "some-test-order-item-type-2"
+                                                  :price        #js {:currency :ZAR
+                                                                     :amount   898}
+                                                  :TESTDummyXYZ "TD-B2"}}]}
+                 (::order @*registry))]
+    (testing "`to-clj` should map a string"
+      (is (= "a-test-id-1234" (:order-id clj-map))))
+    (testing "`to-clj` should map a number"
+      (is (= 23456.89 (:total-amount clj-map))))
+    (testing "`to-clj` should map a value from a nested object"
+      (is (= "MrTesty" (get-in clj-map [:user :user-id]))))
+    (testing "`to-clj` should map a value from a nested array"
+      (is (= :EUR (get-in clj-map [:order-items 0 :order-item :price :currency])))
+      (is (= :ZAR (get-in clj-map [:order-items 1 :order-item :price :currency]))))
+    (testing "`to-clj` should map a value from a property with a different name"
+      (is (= "TD-B2" (get-in clj-map [:order-items 1 :order-item :test-dummy]))))
+    (testing "`to-clj` should map a value from a nested array in a nested array"
+      (is (= "Dunno" (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related]))))))
+
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
-  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
-
+  (t/test-vars [#'malli-ts.data-mapping-test/test-directly-passing-schema-to-js])
+  (t/test-vars [#'malli-ts.data-mapping-test/test-js-objs-to-clj])
+  
 )

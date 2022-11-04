@@ -25,10 +25,6 @@
 
 (def default-get-schema-name :schema)
 
-;; TODO: Change to function
-(def default-js-schema-type
-  (csk/->camelCaseString default-get-schema-name))
-
 (defn- clj<->js-key-mapping
   ([*registry schema-name]
    (let [schema (when schema-name
@@ -74,6 +70,10 @@
   IJsProxy)
 
 #?(:cljs
+   (defn default-js-get-schema-name [obj]
+     (let [sn (csk/->camelCaseString default-get-schema-name)]
+       (js/goog.object.get obj sn nil)))
+
    (defn- map-bean
      [obj clj<->js-map]
      (when clj<->js-map
@@ -113,21 +113,32 @@
        data))
 
    (defn ^:export to-clj
-     ([*schema-registry data]
-      (to-clj *schema-registry data default-js-schema-type))
-     ([*schema-registry data js-schema-type]
-      (let [str-js-schema-tp (if (keyword? js-schema-type)
-                               (name js-schema-type)
-                               js-schema-type)
-            obj              (if (and (array? data)
-                                      (>= (js/goog.object.get data "length" 0) 1))
-                               (aget data 0)
-                               data)
-            schema-type      (js/goog.object.get obj str-js-schema-tp nil)
-            clj<->js-map     (clj<->js-key-mapping-cached *schema-registry schema-type)]
-        (to-clj' data clj<->js-map))))
+     [data & {:keys [registry get-schema-name]
+              :as   schema}]
+     (cond
+       (m/schema? schema)
+       , (->> schema
+              clj<->js-key-mapping-cached
+              (to-clj' data))
 
-   (def ^:export toClj to-clj)
+       (and registry get-schema-name)
+       , (let [get-schema-name (if (fn? get-schema-name)
+                                 get-schema-name
+                                 (fn to-clj-get-schema-nm [o]
+                                   (let [schema-nm (if (keyword? get-schema-name)
+                                                     (name get-schema-name)
+                                                     (str get-schema-name))]
+                                     (js/goog.object.get o schema-nm nil))))
+               obj             (if (and (array? data)
+                                        (>= (js/goog.object.get data "length" 0) 1))
+                                 (aget data 0)
+                                 data)
+               clj<->js-map    (clj<->js-key-mapping-cached registry
+                                                            (get-schema-name obj))]
+           (to-clj' data clj<->js-map))
+
+       :else
+       , (to-clj data :registry registry :get-schema-name default-js-get-schema-name)))
 
    (declare map-proxy)
 
