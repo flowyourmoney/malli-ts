@@ -59,6 +59,97 @@
          {:clj-keys->js-props clj-keys->js-props
           :js-props->clj-keys js-props->clj-keys})))))
 
+(defn- clj<->js-key-mapping2
+  ([*registry schema-name]
+   (let [schema (when schema-name
+                  (get-schema *registry schema-name))]
+     (clj<->js-key-mapping schema)))
+  ([schema]
+   (let [*result (atom [])]
+     (when schema
+       (m/walk
+        schema
+        (fn [schema _path _children _options]
+          (println _path)
+          (when (= :map (m/type schema))
+            (let [path               (reverse _path)
+                  parent-schema      (some #(when (and (not (number? %))
+                                                       (not= % ::m/in))
+                                              %) path)
+                  parent-schema      (or parent-schema ::root)
+                  clj-keys->js-props (->> schema
+                                          m/entries
+                                          (map #(let [k    (key %)
+                                                      s    (-> %
+                                                               val
+                                                               m/schema)
+                                                      prop (-> s
+                                                               m/properties
+                                                               ::mts/clj<->js
+                                                               :prop)
+                                                      p    (or prop (csk/->camelCaseString k))]
+                                                  (when p
+                                                    [k p])))
+                                          (remove nil?)
+                                          (into {}))]
+              (when (seq clj-keys->js-props)
+                (swap! *result conj [parent-schema clj-keys->js-props]))))
+          schema))
+       (into {} @*result)
+       #_(let [clj-keys->js-props (into {} @*result)
+               js-props->clj-keys (set/map-invert clj-keys->js-props)]
+           {:clj-keys->js-props clj-keys->js-props
+            :js-props->clj-keys js-props->clj-keys})))))
+
+(comment
+  (let [order-items-schema [:vector
+                            [:map
+                             [:order/item {:optional      true
+                                           ::mts/clj<->js {:prop    "orderItem"
+                                                           :fn-to   nil
+                                                           :fn-from nil}}
+                              [:map
+                               [:order-item/id uuid?]
+                               [:order-item/type {::mts/clj<->js {:prop "type"}}
+                                string?]
+                               [:order-item/price
+                                [:map
+                                 [:order-item/currency [:enum :EUR :USD :ZAR]]
+                                 [:order-item/amount number?]]]
+                               [:order-item/test-dummy {::mts/clj<->js {:prop "TESTDummyXYZ"}}
+                                string?]
+                               [:order-item/related-items
+                                [:vector [:map
+                                          [:related-item/how-is-related string?
+                                           :related-item/order-item-id uuid?]]]]]]
+                             [:order/credit {:optional true}
+                              [:map
+                               [:order.credit/valid-for-timespan [:enum :milliseconds :seconds :minutes :hours :days]]
+                               [:order.credit/amount number?]]]]]
+        order-schema       [:map
+                            [:model-type [:= ::order]]
+                            [:order/id {::mts/clj<->js {:prop "orderId"}}
+                             string?]
+                            [:order/type {::mts/clj<->js {:prop "orderType"}}
+                             [:or keyword? string?]]
+                            [:order/order-items {:optional      true
+                                                 ::mts/clj<->js {:prop "orderItems"}}
+                             order-items-schema]
+                            [:order/total-amount {:optional      true
+                                                  ::mts/clj<->js {:prop "totalAmount"}}
+                             number?]
+                            [:order/user {:optional true}
+                             [:map
+                              [:user/id {::mts/clj<->js {:prop "userId"}} string?]
+                              [:user/name {:optional true} string?]]]]
+        s                  [:schema {::mts/t-name  "Order"
+                                     ::mts/declare true}
+                            order-schema]]
+    #_(cljs.pprint/pprint (m/form (m/schema s)))
+    (clj<->js-key-mapping2 (m/schema s)))
+
+  )
+
 (def ^:private clj<->js-key-mapping-cached (memoize clj<->js-key-mapping))
 
 ;; js/Proxy is a strange creature, neither `type`
