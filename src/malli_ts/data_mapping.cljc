@@ -28,10 +28,24 @@
   (println :prop->key prop)
   (get js-props->clj-keys prop))
 
-(defn key->prop2
-  [clj-keys->js-props key]
-  (println :key->prop key)
-  (get clj-keys->js-props key))
+(defn- schema-type
+  [{:keys [schema] :as _schema-mapping}]
+  )
+
+(defn- key->prop2
+  [schema-mapping *schema key']
+  (println :key->prop key')
+  #_(cljs.pprint/pprint {::key->prop2 {:S @*schema}})
+  (when-let [new-schema-mapping (if @*schema
+                                  (get-in @*schema [:keys<->props key'])
+                                  (get-in schema-mapping [::root :keys<->props key']))]
+    (let [#_#__               (cljs.pprint/pprint {::key->prop2 {:NSM new-schema-mapping}})
+          new-schema-type (-> new-schema-mapping :schema m/type)
+          new-schema      (if (#{:vector :map} new-schema-type)
+                            (get schema-mapping key')
+                            new-schema-mapping)]
+      (reset! *schema new-schema)
+      (get new-schema-mapping :prop))))
 
 (def default-get-schema-name :schema)
 
@@ -94,31 +108,36 @@
                                          (get-in @*result [parent-schema-key schema-key :prop]))
                   clj-keys->js-props   (->> schema
                                             m/entries
-                                            (mapcat #(let [k    (key %)
-                                                           s    (-> %
-                                                                    val
-                                                                    m/schema)
-                                                           prop (-> s
-                                                                    m/properties
-                                                                    ::mts/clj<->js
-                                                                    :prop)
-                                                           p    (or prop (csk/->camelCaseString k))]
+                                            (mapcat #(let [k                (key %)
+                                                           malli-val-schema (val %)
+                                                           #_#_s            (m/schema v)
+                                                           s                (-> malli-val-schema m/form last m/schema)
+                                                           prop             (-> malli-val-schema
+                                                                                m/properties
+                                                                                ::mts/clj<->js
+                                                                                :prop)
+                                                           p                (or prop (csk/->camelCaseString k))]
                                                        (when p
                                                          [[p {:key    k
+                                                              :type   (m/type s)
                                                               :schema s}]
-                                                          [k {:prop p}]])))
+                                                          [k {:prop   p
+                                                              :type   (m/type s)
+                                                              :schema s}]])))
                                             (remove nil?)
                                             (into {}))]
               (when (seq clj-keys->js-props)
                 (swap! *result merge {schema-key {:parent       parent-schema-key
+                                                  :schema       schema
                                                   :keys<->props clj-keys->js-props}}))))
           schema))
-       (->> @*result
-            (map (fn [[k {:keys [parent] :as v}]]
-                   (let [prop (when parent
-                                (get-in @*result [parent :keys<->props k :prop]))]
+       @*result
+       #_(->> @*result
+              (map (fn [[k {:keys [parent] :as v}]]
+                     (let [prop (when parent
+                                  (get-in @*result [parent :keys<->props k :prop]))]
                      [(or prop k) v])))
-            (into {}))
+              (into {}))
        #_(into {} @*result)
        #_(let [clj-keys->js-props (into {} @*result)
                js-props->clj-keys (set/map-invert clj-keys->js-props)]
@@ -150,13 +169,21 @@
              fn-prop->key (partial prop->key js-props->clj-keys)]
          (bean obj :prop->key fn-prop->key :key->prop fn-key->prop :recursive true))))
 
+   (defn- transform
+     [*schema-mapping val']
+     (cljs.pprint/pprint {::transform #_@*schema-mapping
+                          (-> @*schema-mapping :schema m/form)}))
+
    (defn- map-bean2
-     [obj clj<->js-map]
-     (when clj<->js-map
-       (let [fn-key->prop (partial key->prop2 clj<->js-map)
-             fn-prop->key (partial prop->key2 clj<->js-map)]
-         (println ::map-bean2)
-         (bean obj :prop->key fn-prop->key :key->prop fn-key->prop :recursive true))))
+     [obj clj<->js-map *schema]
+     (let [fn-key->prop (partial key->prop2 clj<->js-map *schema)
+           fn-prop->key (partial prop->key2 clj<->js-map)
+           fn-transform (partial transform *schema)]
+       (bean obj
+             :prop->key fn-prop->key
+             :key->prop fn-key->prop
+             :transform fn-transform
+             :recursive true)))
 
    (declare to-clj')
 
@@ -181,7 +208,7 @@
        (js/goog.object.get data "unwrap/clj" nil)
 
        (object? data)
-       (map-bean2 data clj<->js-map)
+       (map-bean2 data clj<->js-map (atom nil))
 
        :else
        data))
@@ -245,9 +272,9 @@
                                 string?]
                                [:order/type {::mts/clj<->js {:prop "orderType"}}
                                 [:or keyword? string?]]
-                               #_[:order/order-items {:optional      true
-                                                      ::mts/clj<->js {:prop "orderItems"}}
-                                  order-items-schema]
+                               [:order/items {:optional      true
+                                              ::mts/clj<->js {:prop "orderItems"}}
+                                order-items-schema]
                                [:order/total-amount {:optional      true
                                                      ::mts/clj<->js {:prop "totalAmount"}}
                                 number?]
@@ -260,13 +287,25 @@
                                             ::mts/declare true}
                                    order-schema]
                                   m/schema)
-           clj-map            (to-clj #js {"modelType" ::order
-                                           "orderId"   "2763yughjbh333"
-                                           "orderType" "Sport Gear"
-                                           "user"      #js {"userId" "u678672"
-                                                            "name"   "Kosie"}} s)]
-       #_(cljs.pprint/pprint (:order/user clj-map))
-       (map prn clj-map)
+           clj-map            (to-clj #js {"modelType"  ::order
+                                           "orderId"    "2763yughjbh333"
+                                           "orderType"  "Sport Gear"
+                                           "user"       #js {"userId" "u678672"
+                                                             "name"   "Kosie"}
+                                           "orderItems" #js [#js {:orderItem
+                                                                  #js {:type         "some-test-order-item-type-1"
+                                                                       :price        #js {:currency :EUR
+                                                                                          :amount   22.3}
+                                                                       :TESTDummyXYZ "TD-A1"
+                                                                       :relatedItems #js [#js {:howIsRelated "Dunno"}]}}
+                                                             #js {:orderItem
+                                                                  #js {:type         "some-test-order-item-type-2"
+                                                                       :price        #js {:currency :ZAR
+                                                                                          :amount   898}
+                                                                       :TESTDummyXYZ "TD-B2"}}]} s)]
+       #_(get-in clj-map [:order/user :user/id])
+       (get-in clj-map [:order/items 0 :order/item :order-item/price :order-item/currency])
+       #_(get-in clj-map [:order/user :user/id])
     #_(cljs.pprint/pprint (m/form (m/schema s)))
     #_(cljs.pprint/pprint (clj<->js-key-mapping2 (m/schema s))))
 
