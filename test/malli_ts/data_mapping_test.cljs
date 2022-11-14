@@ -275,7 +275,8 @@
 
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
-  (t/test-vars [#'malli-ts.data-mapping-test/test-directly-passing-schema-to-js])
+  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
+
   (t/test-vars [#'malli-ts.data-mapping-test/test-js-objs-to-clj])
   
 )
