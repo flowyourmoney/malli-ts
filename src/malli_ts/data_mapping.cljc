@@ -30,8 +30,8 @@
 
 (defn- key->prop2
   [current-mapping key']
-  (println :key->prop key' (get-in current-mapping [key' :prop]))
-  (cljs.pprint/pprint current-mapping)
+  #_(println :key->prop key' (get-in current-mapping [key' :prop]))
+  ;;(cljs.pprint/pprint current-mapping)
   (get-in current-mapping [key' :prop]))
 
 (def default-get-schema-name :schema)
@@ -183,9 +183,9 @@
      [{:keys [js->clj-mapping
               clj->js-mapping]
        :as   mapping} cur-js->clj-mapping cur-clj->js-mapping x
-      {prop :prop, prop :key, nth' :nth, :as _ctx}]
-     (println ::transform-bean x)
-     (println)
+      {prop :prop, key' :key, nth' :nth, :as _ctx}]
+     #_(println ::transform-bean x)
+     #_(println)
      (if (primitive? x)
        x
        (let [cur-js->clj-mapping (if-let [ref (get cur-js->clj-mapping ::ref)]
@@ -208,12 +208,12 @@
                                  , cur-clj->js-mapping
 
                                  cur-clj->js-mapping
-                                 , (get-in cur-clj->js-mapping [prop :schema])
+                                 , (get-in cur-clj->js-mapping [key' :schema])
 
                                  :else
                                  , (::root clj->js-mapping))
 
-             _            (cljs.pprint/pprint {:*C*   _ctx
+             #_#__            (cljs.pprint/pprint {:*C*   _ctx
                                                :*CM*  cur-clj->js-mapping
                                                :*NCM* new-cur-clj->js-m})
              fn-key->prop (partial key->prop2 new-cur-clj->js-m)
@@ -291,7 +291,7 @@
                                         [:order/credit {:optional true}
                                          [:map
                                           [:order.credit/valid-for-timespan [:enum :milliseconds :seconds :minutes :hours :days]]
-                                          [:order.credit/amount number?]]]]]
+                                          [:order-credit/amount number?]]]]]
            order-schema       [:map
                                [:model-type [:= ::order]]
                                [:order/id {::mts/clj<->js {:prop "orderId"}}
@@ -325,7 +325,7 @@
                                                                                           :amount   22.3}
                                                                        :TESTDummyXYZ "TD-A1"
                                                                        :relatedItems #js [#js {:credit
-                                                                                               {:amount 676.30}}]}}
+                                                                                               #js {:amount 676.30}}]}}
                                                              #js {:orderItem
                                                                   #js {:type         "some-test-order-item-type-2"
                                                                        :price        #js {:currency :ZAR
@@ -334,7 +334,9 @@
        #_(cljs.pprint/pprint (clj<->js-mapping s :->clj))
        #_(cljs.pprint/pprint (m/form s))
        #_(-> clj-map :order/user :user/id)
-       (get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency])
+       (get-in clj-map [:order/items 0 :order/item :order-item/related-items 0
+                        :order/credit :order-credit/amount])
+       #_(get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency])
        )
 
   )
@@ -379,7 +381,7 @@
                                  (get js->clj-mapping ref)
                                  cur-js->clj-mapping)
            new-cur-js->clj-m   (get-in cur-js->clj-mapping [prop :schema])]
-       (cljs.pprint/pprint {#_#_:*T* target
+       #_(cljs.pprint/pprint {#_#_:*T* target
                             :*P*     prop
                             :*CM*    cur-js->clj-mapping
                             :*N-CM*  new-cur-js->clj-m})

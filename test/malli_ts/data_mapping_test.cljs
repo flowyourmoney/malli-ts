@@ -5,59 +5,56 @@
             [malli.core :as m]
             [cljs-bean.core :as b]))
 
-(def *registry
-  (let [order-items-schema [:vector
-                            [:map
-                             [:order-item {:optional      true
-                                           ::mts/clj<->js {:prop    "orderItem"
-                                                           :fn-to   nil
-                                                           :fn-from nil}}
-                              [:map
-                               [:order-item-id uuid?]
-                               [:type {::mts/clj<->js {:prop "type"}}
-                                string?]
-                               [:price
-                                [:map
-                                 [:currency [:enum :EUR :USD :ZAR]]
-                                 [:amount number?]]]
-                               [:test-dummy {::mts/clj<->js {:prop "TESTDummyXYZ"}}
-                                string?]
-                               [:related-items
-                                [:vector [:map
-                                          [:how-is-related string?
-                                           :order-item-id uuid?]]]]]]
-                             [:credit {:optional true}
-                              [:map
-                               [:valid-for-timespan [:enum :milliseconds :seconds :minutes :hours :days]]
-                               [:amount number?]]]]]
+(def schema
+  (let [order-items-schema [:vector [:map
+                                     [:order/item {:optional      true
+                                                   ::mts/clj<->js {:prop    "orderItem"
+                                                                   :fn-to   nil
+                                                                   :fn-from nil}}
+                                      [:map
+                                       [:order-item/id uuid?]
+                                       [:order-item/type {::mts/clj<->js {:prop "type"}}
+                                        string?]
+                                       [:order-item/price
+                                        [:map
+                                         [:order-item/currency [:enum :EUR :USD :ZAR]]
+                                         [:order-item/amount number?]]]
+                                       [:order-item/test-dummy {::mts/clj<->js {:prop "TESTDummyXYZ"}}
+                                        string?]
+                                       [:order-item/related-items
+                                        [:ref ::order-items]]]]
+                                     [:order/credit {:optional true}
+                                      [:map
+                                       [:order.credit/valid-for-timespan [:enum :milliseconds :seconds :minutes :hours :days]]
+                                       [:order.credit/amount number?]]]]]
         order-schema       [:map
                             [:model-type [:= ::order]]
-                            [:order-id {::mts/clj<->js {:prop "orderId"}}
+                            [:order/id {::mts/clj<->js {:prop "orderId"}}
                              string?]
-                            [:order-type {::mts/clj<->js {:prop "orderType"}}
+                            [:order/type {::mts/clj<->js {:prop "orderType"}}
                              [:or keyword? string?]]
-                            [:order-items {:optional      true
-                                           ::mts/clj<->js {:prop "orderItems"}}
-                             order-items-schema]
-                            [:total-amount {:optional      true
-                                            ::mts/clj<->js {:prop "totalAmount"}}
+                            [:order/items {:optional      true
+                                           ::mts/clj<->js {:prop "orderItems"}} ::order-items]
+                            [:order/total-amount {:optional      true
+                                                  ::mts/clj<->js {:prop "totalAmount"}}
                              number?]
-                            [:user {:optional true}
+                            [:order/user {::mts/clj<->js {:prop "user"}
+                                          :optional      true}
                              [:map
-                              [:user-id {::mts/clj<->js {:prop "userId"}} string?]
-                              [:name {:optional true} string?]]]]
-        s                  [:schema {::mts/t-name  "Order"
-                                     ::mts/declare true}
-                            order-schema]
-        *r                 (atom (m/default-schemas))]
-    (swap! *r assoc ::order (m/schema s))
-    *r))
+                              [:user/id {::mts/clj<->js {:prop "userId"}} string?]
+                              [:user/name {:optional true} string?]]]]]
+    (m/schema [:schema {:registry {::order-items order-items-schema}}
+               order-schema])))
+
+;; TODO:
+;; 1. Add tests for references
+;; 2. For duplicate property names in different locations in the schema
 
 (deftest test-a-js-obj-to-clj
   (let [clj-map (sut/to-clj
                  #js {:modelType   ::order
                       :orderId     "a-test-id-1234"
-                      :orderType   "a-test-wf-type"
+                      :orderType   "Sport Gear"
                       :totalAmount 23456.89
                       :user        #js {:userId "MrTesty"
                                         :name   "Testy The QA"}
@@ -66,27 +63,28 @@
                                                   :price        #js {:currency :EUR
                                                                      :amount   22.3}
                                                   :TESTDummyXYZ "TD-A1"
-                                                  :relatedItems #js [#js {:howIsRelated "Dunno"}]}}
+                                                  :relatedItems #js [#js {:credit
+                                                                          #js {:amount 676.30}}]}}
                                         #js {:orderItem
                                              #js {:type         "some-test-order-item-type-2"
                                                   :price        #js {:currency :ZAR
                                                                      :amount   898}
                                                   :TESTDummyXYZ "TD-B2"}}]}
-                 :registry *registry
-                 :get-schema-name :modelType)]
+                 schema)]
     (testing "`to-clj` should map a string"
-      (is (= "a-test-id-1234" (:order-id clj-map))))
+      (is (= "a-test-id-1234" (:order/id clj-map))))
     (testing "`to-clj` should map a number"
-      (is (= 23456.89 (:total-amount clj-map))))
+      (is (= 23456.89 (:order/total-amount clj-map))))
     (testing "`to-clj` should map a value from a nested object"
-      (is (= "MrTesty" (get-in clj-map [:user :user-id]))))
+      (is (= "MrTesty" (get-in clj-map [:order/user :user/id]))))
     (testing "`to-clj` should map a value from a nested array"
-      (is (= :EUR (get-in clj-map [:order-items 0 :order-item :price :currency])))
-      (is (= :ZAR (get-in clj-map [:order-items 1 :order-item :price :currency]))))
+      (is (= :EUR (get-in clj-map [:order/items 0 :order/item :order-item/price :order-item/currency])))
+      (is (= :ZAR (get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency]))))
     (testing "`to-clj` should map a value from a property with a different name"
-      (is (= "TD-B2" (get-in clj-map [:order-items 1 :order-item :test-dummy]))))
+      (is (= "TD-B2" (get-in clj-map [:order/items 1 :order/item :order-item/test-dummy]))))
     (testing "`to-clj` should map a value from a nested array in a nested array"
-      (is (= "Dunno" (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related]))))))
+      (is (= 676.30 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
+                                  0 :order/credit :order.credit/amount]))))))
 
 (defn- rand-amount [] (* (rand) 100))
 
@@ -105,178 +103,130 @@
                                                            :price        #js {:currency :EUR
                                                                               :amount   (rand-amount)}
                                                            :TESTDummyXYZ (str "TD-A" i)
-                                                           :relatedItems #js [#js {:howIsRelated (str "Dunno" i)}]}}
+                                                           :relatedItems #js [#js {:credit
+                                                                                   #js {:amount (inc (rand-amount))}}]}}
                                                  #js {:orderItem
                                                       #js {:type         (str "some-test-order-item-type-B" i)
                                                            :price        #js {:currency :ZAR
                                                                               :amount   (rand-amount)}
                                                            :TESTDummyXYZ (str "TD-B" i) }}]}))
                        (sut/into-js-array (range item-count)))
-        clj-maps   (sut/to-clj js-objs :registry *registry :get-schema-name "modelType")]
-    (doall (keep-indexed
-            (fn [i clj-map]
-              (testing "`to-clj` given an array, should map a string"
-                (is (= (str "a-test-id-" i)
-                       (:order-id clj-map))))
-              (testing "`to-clj` given an array, should map a number"
-                (is (number? (:total-amount clj-map))))
-              (testing "`to-clj` given an array, should map a value from a nested object"
-                (is (= (str "MrTesty" i) (get-in clj-map [:user :user-id]))))
-              (testing "`to-clj` given an array, should map a value from a nested array"
-                (is (= :EUR (get-in clj-map [:order-items 0 :order-item :price :currency])))
-                (is (= :ZAR (get-in clj-map [:order-items 1 :order-item :price :currency]))))
-              (testing "`to-clj` given an array, should map a value from a property with a different name"
-                (is (= (str "TD-B" i) (get-in clj-map [:order-items 1 :order-item :test-dummy]))))
-              (testing "`to-clj` given an array, should map a value from a nested array in a nested array"
-                (is (= (str "Dunno" i) (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related])))))
-            clj-maps))))
+        clj-maps   (sut/to-clj js-objs schema)]
+    (doall
+     (keep-indexed
+      (fn [i clj-map]
+        (testing  "`to-clj` given an array, should map a string"
+          (is (= (str "a-test-id-" i) (:order/id clj-map))))
+        (testing "`to-clj` given an array, should map a number"
+          (is (number? (:order/total-amount clj-map))))
+        (testing  "`to-clj` given an array, should map a value from a nested object"
+          (is (= (str "MrTesty" i) (get-in clj-map [:order/user :user/id]))))
+        (testing  "`to-clj` given an array, should map a value from a nested array"
+          (is (= :EUR (get-in clj-map [:order/items 0 :order/item :order-item/price :order-item/currency])))
+          (is (= :ZAR (get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency]))))
+        (testing  "`to-clj` given an array, should map a value from a property with a different name"
+          (is (= (str "TD-B" i) (get-in clj-map [:order/items 1 :order/item :order-item/test-dummy]))))
+        (testing "`to-clj` given an array, should map a value from a nested array in a nested array"
+          (is (< 0 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
+                                         0 :order/credit :order.credit/amount])))))
+      clj-maps))))
 
 (deftest test-a-clj-map-to-js
-  (let [js-obj (sut/to-js {:schema       ::order
-                           :order-id     "a-test-id-1234"
-                           :order-type   "a-test-wf-type"
-                           :total-amount 23456.89
-                           :user         {:user-id "MrTesty"
-                                          :name    "Testy The QA"}
-                           :order-items  [{:order-item
-                                           {:type          "some-test-order-item-type-1"
-                                            :price         {:currency :EUR
-                                                            :amount   22.3}
-                                            :test-dummy    "TD-A1"
-                                            :related-items [{:how-is-related "Dunno"}]}}
-                                          {:order-item
-                                           {:type       "some-test-order-item-type-2"
-                                            :price      {:currency :ZAR
-                                                         :amount   898}
-                                            :test-dummy "TD-B2"}}]}
-                          :registry *registry)]
+  (let [order-id      "a-test-id-1234"
+        total-amount  23456.89
+        user-id       "MrTesty"
+        currency1     :EUR
+        currency2     :ZAR
+        test-dummy    "TD-B2"
+        credit-amount 676.30
+        js-obj        (sut/to-js {:model-type         ::order
+                                  :order/id           order-id
+                                  :order/type         "a-test-wf-type"
+                                  :order/total-amount total-amount
+                                  :order/user         {:user/id   user-id
+                                                       :user/name "Testy The QA"}
+                                  :order/items        [{:order/item
+                                                        {:order-item/type          "some-test-order-item-type-1"
+                                                         :order-item/price         {:order-item/currency currency1
+                                                                                    :order-item/amount   22.3}
+                                                         :order-item/test-dummy    "TD-A1"
+                                                         :order-item/related-items [{:order/credit
+                                                                                     {:order.credit/amount credit-amount}}]}}
+                                                       {:order/item
+                                                        {:order-item/type       "some-test-order-item-type-2"
+                                                         :order-item/price      {:order-item/currency currency2
+                                                                                 :order-item/amount   898}
+                                                         :order-item/test-dummy test-dummy}}]}
+                                 schema)]
     (testing "`to-js` should map a string"
-      (is (= "a-test-id-1234" (-> js-obj .-orderId))))
+      (is (= order-id (-> js-obj .-orderId))))
     (testing "`to-js` should map a number"
-      (is (= 23456.89 (-> js-obj .-totalAmount))))
+      (is (= total-amount (-> js-obj .-totalAmount))))
     (testing "`to-js` should map a value from a nested map"
-      (is (= "MrTesty" (-> js-obj .-user .-userId))))
+      (is (= user-id (-> js-obj .-user .-userId))))
     (testing "`to-js` should map a value from a nested vector"
-      (is (= :EUR (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
-      (is (= :ZAR (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+      (is (= currency1 (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
+      (is (= currency2 (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
     (testing "`to-js` should map a value to a property with a different name"
-      (is (= "TD-B2" (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+      (is (= test-dummy (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
     (testing "`to-js` should map a value from a nested vector in a nested vector"
-      (is (= "Dunno" (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated))))))
+      (is (= credit-amount (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems
+                               (aget 0) .-credit .-amount))))))
 
 (deftest test-clj-maps-to-js
   (let [item-count 20
+        order-id   "a-test-id-"
+        order-type "a-test-order-type-"
+        user-id    "MrTesty"
+        user-name  "Testy The QA"
+        currency1  :EUR
+        currency2  :ZAR
+        test-dummy "TD-B"
         clj-maps   (->> item-count
                         range
                         (mapv
                          (fn [i]
-                           {:schema       ::order
-                            :order-id     (str "a-test-id-" i)
-                            :order-type   (str "a-test-wf-type" i)
-                            :total-amount (rand-amount)
-                            :user         {:user-id (str "MrTesty" i)
-                                           :name    (str "Testy The QA" i)}
-                            :order-items  [{:order-item
-                                            {:type          (str "some-test-order-item-type-A" i)
-                                             :price         {:currency :EUR
-                                                             :amount   (rand-amount)}
-                                             :test-dummy    (str "TD-A" i)
-                                             :related-items [{:how-is-related (str "Dunno" i)}]}}
-                                           {:order-item
-                                            {:type       (str "some-test-order-item-type-B" i)
-                                             :price      {:currency :ZAR
-                                                          :amount   (rand-amount)}
-                                             :test-dummy (str "TD-B" i) }}]})))
-        js-objs    (sut/to-js clj-maps :registry *registry)]
+                           {:model-type         ::order
+                            :order/id           (str order-id i)
+                            :order/type         (str order-type i)
+                            :order/total-amount (rand-amount)
+                            :order/user         {:user/id   (str user-id i)
+                                                 :user/name (str user-name i)}
+                            :order/items        [{:order/item
+                                                  {:order-item/type          "some-test-order-item-type-1"
+                                                   :order-item/price         {:order-item/currency currency1
+                                                                              :order-item/amount   (rand-amount)}
+                                                   :order-item/test-dummy    "TD-A1"
+                                                   :order-item/related-items [{:order/credit
+                                                                               {:order.credit/amount (rand-amount)}}]}}
+                                                 {:order/item
+                                                  {:order-item/type       "some-test-order-item-type-2"
+                                                   :order-item/price      {:order-item/currency currency2
+                                                                           :order-item/amount   (rand-amount)}
+                                                   :order-item/test-dummy (str test-dummy i)}}]})))
+        js-objs    (sut/to-js clj-maps schema)]
     (doall (keep-indexed
             (fn [i js-obj]
               (testing "`to-js` given a vector, should map a string"
-                (is (= (str "a-test-id-" i)
-                       (-> js-obj .-orderId))))
+                (is (=  (str order-id i) (-> js-obj .-orderId))))
               (testing "`to-js` given a vector, should map a number"
                 (is (number? (-> js-obj .-totalAmount))))
-              (testing "`to-js` given a vector, should map a value from a nested map"
-                (is (= (str "MrTesty" i) (-> js-obj .-user .-userId))))
-              (testing "`to-js` given a vector, should map a value from a nested verctor"
-                (is (= :EUR (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
-                (is (= :ZAR (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
-              (testing "`to-js` given a vector, should map a value to a property with a different name"
-                (is (= (str "TD-B" i) (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
-              (testing "`to-js` given a vector, should map a value from a nested vector in a nested vector"
-                (is (= (str "Dunno" i) (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated)))))
+              (testing  "`to-js` given a vector, should map a value from a nested map"
+                (is (= (str user-id i) (-> js-obj .-user .-userId))))
+              (testing  "`to-js` given a vector, should map a value from a nested verctor"
+                (is (= currency1 (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
+                (is (= currency2 (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+              (testing  "`to-js` given a vector, should map a value to a property with a different name"
+                (is (= (str test-dummy i) (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+              (testing "`to-js` should map a value from a nested vector in a nested vector"
+                (is (number? (-> js-obj .-orderItems (aget 0) .-orderItem
+                                 .-relatedItems (aget 0) .-credit .-amount)))))
             js-objs))))
-
-(deftest test-directly-passing-schema-to-js
-  (let [js-obj (sut/to-js {:schema       ::order
-                           :order-id     "a-test-id-1234"
-                           :order-type   "a-test-wf-type"
-                           :total-amount 23456.89
-                           :user         {:user-id "MrTesty"
-                                          :name    "Testy The QA"}
-                           :order-items  [{:order-item
-                                           {:type          "some-test-order-item-type-1"
-                                            :price         {:currency :EUR
-                                                            :amount   22.3}
-                                            :test-dummy    "TD-A1"
-                                            :related-items [{:how-is-related "Dunno"}]}}
-                                          {:order-item
-                                           {:type       "some-test-order-item-type-2"
-                                            :price      {:currency :ZAR
-                                                         :amount   898}
-                                            :test-dummy "TD-B2"}}]}
-                          (::order @*registry))]
-    (testing "`to-js` should map a string"
-      (is (= "a-test-id-1234" (-> js-obj .-orderId))))
-    (testing "`to-js` should map a number"
-      (is (= 23456.89 (-> js-obj .-totalAmount))))
-    (testing "`to-js` should map a value from a nested map"
-      (is (= "MrTesty" (-> js-obj .-user .-userId))))
-    (testing "`to-js` should map a value from a nested vector"
-      (is (= :EUR (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
-      (is (= :ZAR (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
-    (testing "`to-js` should map a value to a property with a different name"
-      (is (= "TD-B2" (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
-    (testing "`to-js` should map a value from a nested vector in a nested vector"
-      (is (= "Dunno" (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems (aget 0) .-howIsRelated))))))
-
-(deftest test-directly-passing-schema-to-clj
-  (let [clj-map (sut/to-clj
-                 #js {:modelType   ::order
-                      :orderId     "a-test-id-1234"
-                      :orderType   "a-test-wf-type"
-                      :totalAmount 23456.89
-                      :user        #js {:userId "MrTesty"
-                                        :name   "Testy The QA"}
-                      :orderItems  #js [#js {:orderItem
-                                             #js {:type         "some-test-order-item-type-1"
-                                                  :price        #js {:currency :EUR
-                                                                     :amount   22.3}
-                                                  :TESTDummyXYZ "TD-A1"
-                                                  :relatedItems #js [#js {:howIsRelated "Dunno"}]}}
-                                        #js {:orderItem
-                                             #js {:type         "some-test-order-item-type-2"
-                                                  :price        #js {:currency :ZAR
-                                                                     :amount   898}
-                                                  :TESTDummyXYZ "TD-B2"}}]}
-                 (::order @*registry))]
-    (testing "`to-clj` should map a string"
-      (is (= "a-test-id-1234" (:order-id clj-map))))
-    (testing "`to-clj` should map a number"
-      (is (= 23456.89 (:total-amount clj-map))))
-    (testing "`to-clj` should map a value from a nested object"
-      (is (= "MrTesty" (get-in clj-map [:user :user-id]))))
-    (testing "`to-clj` should map a value from a nested array"
-      (is (= :EUR (get-in clj-map [:order-items 0 :order-item :price :currency])))
-      (is (= :ZAR (get-in clj-map [:order-items 1 :order-item :price :currency]))))
-    (testing "`to-clj` should map a value from a property with a different name"
-      (is (= "TD-B2" (get-in clj-map [:order-items 1 :order-item :test-dummy]))))
-    (testing "`to-clj` should map a value from a nested array in a nested array"
-      (is (= "Dunno" (get-in clj-map [:order-items 0 :order-item :related-items 0 :how-is-related]))))))
 
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
-  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
 
+  (t/test-vars [#'malli-ts.data-mapping-test/test-a-clj-map-to-js])
   (t/test-vars [#'malli-ts.data-mapping-test/test-js-objs-to-clj])
   
 )
