@@ -2,8 +2,9 @@
   (:require [cljs.test :as t :refer-macros [deftest is testing]]
             [malli-ts.core               :as-alias mts]
             [malli-ts.data-mapping :as sut]
-            [malli.core :as m]
-            [cljs-bean.core :as b]))
+            [malli-ts.data-mapping.to-clj :as sut-tc]
+            [malli-ts.data-mapping.to-js :as sut-tj]
+            [malli.core :as m]))
 
 (def schema
   (let [order-items-schema [:vector [:map
@@ -47,11 +48,11 @@
                order-schema])))
 
 ;; TODO:
-;; 1. Add tests for references
+;; 1. Add another test for references
 ;; 2. For duplicate property names in different locations in the schema
 
 (deftest test-a-js-obj-to-clj
-  (let [clj-map (sut/to-clj
+  (let [clj-map (sut-tc/to-clj
                  #js {:modelType   ::order
                       :orderId     "a-test-id-1234"
                       :orderType   "Sport Gear"
@@ -110,8 +111,8 @@
                                                            :price        #js {:currency :ZAR
                                                                               :amount   (rand-amount)}
                                                            :TESTDummyXYZ (str "TD-B" i) }}]}))
-                       (sut/into-js-array (range item-count)))
-        clj-maps   (sut/to-clj js-objs schema)]
+                       (sut-tj/into-js-array (range item-count)))
+        clj-maps   (sut-tc/to-clj js-objs schema)]
     (doall
      (keep-indexed
       (fn [i clj-map]
@@ -139,25 +140,25 @@
         currency2     :ZAR
         test-dummy    "TD-B2"
         credit-amount 676.30
-        js-obj        (sut/to-js {:model-type         ::order
-                                  :order/id           order-id
-                                  :order/type         "a-test-wf-type"
-                                  :order/total-amount total-amount
-                                  :order/user         {:user/id   user-id
-                                                       :user/name "Testy The QA"}
-                                  :order/items        [{:order/item
-                                                        {:order-item/type          "some-test-order-item-type-1"
-                                                         :order-item/price         {:order-item/currency currency1
-                                                                                    :order-item/amount   22.3}
-                                                         :order-item/test-dummy    "TD-A1"
-                                                         :order-item/related-items [{:order/credit
-                                                                                     {:order.credit/amount credit-amount}}]}}
-                                                       {:order/item
-                                                        {:order-item/type       "some-test-order-item-type-2"
-                                                         :order-item/price      {:order-item/currency currency2
-                                                                                 :order-item/amount   898}
-                                                         :order-item/test-dummy test-dummy}}]}
-                                 schema)]
+        js-obj        (sut-tj/to-js {:model-type         ::order
+                                     :order/id           order-id
+                                     :order/type         "a-test-wf-type"
+                                     :order/total-amount total-amount
+                                     :order/user         {:user/id   user-id
+                                                          :user/name "Testy The QA"}
+                                     :order/items        [{:order/item
+                                                           {:order-item/type          "some-test-order-item-type-1"
+                                                            :order-item/price         {:order-item/currency currency1
+                                                                                       :order-item/amount   22.3}
+                                                            :order-item/test-dummy    "TD-A1"
+                                                            :order-item/related-items [{:order/credit
+                                                                                        {:order.credit/amount credit-amount}}]}}
+                                                          {:order/item
+                                                           {:order-item/type       "some-test-order-item-type-2"
+                                                            :order-item/price      {:order-item/currency currency2
+                                                                                    :order-item/amount   898}
+                                                            :order-item/test-dummy test-dummy}}]}
+                                    schema)]
     (testing "`to-js` should map a string"
       (is (= order-id (-> js-obj .-orderId))))
     (testing "`to-js` should map a number"
@@ -204,7 +205,7 @@
                                                    :order-item/price      {:order-item/currency currency2
                                                                            :order-item/amount   (rand-amount)}
                                                    :order-item/test-dummy (str test-dummy i)}}]})))
-        js-objs    (sut/to-js clj-maps schema)]
+        js-objs    (sut-tj/to-js clj-maps schema)]
     (doall (keep-indexed
             (fn [i js-obj]
               (testing "`to-js` given a vector, should map a string"
