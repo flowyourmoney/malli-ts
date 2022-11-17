@@ -7,7 +7,7 @@
 
 (defn prop->key
   [js-props->clj-keys prop]
-  (get js-props->clj-keys prop))
+  (get-in js-props->clj-keys [prop :key]))
 
 (defn- key->prop
   [current-mapping key']

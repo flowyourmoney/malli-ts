@@ -72,20 +72,65 @@
                                                                      :amount   898}
                                                   :TESTDummyXYZ "TD-B2"}}]}
                  schema)]
-    (testing "`to-clj` should map a string"
-      (is (= "a-test-id-1234" (:order/id clj-map))))
-    (testing "`to-clj` should map a number"
-      (is (= 23456.89 (:order/total-amount clj-map))))
-    (testing "`to-clj` should map a value from a nested object"
-      (is (= "MrTesty" (get-in clj-map [:order/user :user/id]))))
-    (testing "`to-clj` should map a value from a nested array"
-      (is (= :EUR (get-in clj-map [:order/items 0 :order/item :order-item/price :order-item/currency])))
-      (is (= :ZAR (get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency]))))
-    (testing "`to-clj` should map a value from a property with a different name"
-      (is (= "TD-B2" (get-in clj-map [:order/items 1 :order/item :order-item/test-dummy]))))
-    (testing "`to-clj` should map a value from a nested array in a nested array"
-      (is (= 676.30 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
-                                  0 :order/credit :order.credit/amount]))))))
+    (do
+      (testing  "`pr-str` should be clojure readable"
+        (is (= "{:model-type :malli-ts.data-mapping-test/order, :order/id \"a-test-id-1234\", :order/type \"Sport Gear\", :order/total-amount 23456.89, :order/user {:user/id \"MrTesty\", :user/name \"Testy The QA\"}, :order/items [{:order/item {:order-item/type \"some-test-order-item-type-1\", :order-item/price {:order-item/currency :EUR, :order-item/amount 22.3}, :order-item/test-dummy \"TD-A1\", :order-item/related-items [{:order/credit {:order.credit/amount 676.3}}]}} {:order/item {:order-item/type \"some-test-order-item-type-2\", :order-item/price {:order-item/currency :ZAR, :order-item/amount 898}, :order-item/test-dummy \"TD-B2\"}}]}" (pr-str clj-map))))
+      (testing "`to-clj` should map a string"
+        (is (= "a-test-id-1234" (:order/id clj-map))))
+      (testing "`to-clj` should map a number"
+        (is (= 23456.89 (:order/total-amount clj-map))))
+      (testing "`to-clj` should map a value from a nested object"
+        (is (= "MrTesty" (get-in clj-map [:order/user :user/id]))))
+      (testing "`to-clj` should map a value from a nested array"
+        (is (= :EUR (get-in clj-map [:order/items 0 :order/item :order-item/price :order-item/currency])))
+        (is (= :ZAR (get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency]))))
+      (testing "`to-clj` should map a value from a property with a different name"
+        (is (= "TD-B2" (get-in clj-map [:order/items 1 :order/item :order-item/test-dummy]))))
+      (testing "`to-clj` should map a value from a nested array in a nested array"
+        (is (= 676.30 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
+                                       0 :order/credit :order.credit/amount])))))))
+
+(deftest a-regular-clj-object
+  (let [clj-map
+                  {:model-type   ::order
+                      :order/id     "a-test-id-1234"
+                      :order/type   "Sport Gear"
+                      :order/total-amount 23456.89
+                      :order/user         {:user/id "MrTesty"
+                                        :user/name   "Testy The QA"}
+                      :order/items   [ {:order/item
+                                              {:order-item/type         "some-test-order-item-type-1"
+                                                  :order-item/price         {:order-item/currency :EUR
+                                                                     :order-item/amount   22.3}
+                                                  :order-item/test-dummy "TD-A1"
+                                                  :order-item/related-items  [ {:order/credit
+                                                                           {:order.credit/amount 676.30}}]}}
+                                         {:order/item
+                                              {:order-item/type         "some-test-order-item-type-2"
+                                                  :order-item/price         {:order-item/currency :ZAR
+                                                                     :order-item/amount   898}
+                                                  :order-item/test-dummy "TD-B2"}}]}]
+    (do
+      (testing  "`pr-str` should be clojure readable"
+        (is (= "{:model-type :malli-ts.data-mapping-test/order, :order/id \"a-test-id-1234\", :order/type \"Sport Gear\", :order/total-amount 23456.89, :order/user {:user/id \"MrTesty\", :user/name \"Testy The QA\"}, :order/items [{:order/item {:order-item/type \"some-test-order-item-type-1\", :order-item/price {:order-item/currency :EUR, :order-item/amount 22.3}, :order-item/test-dummy \"TD-A1\", :order-item/related-items [{:order/credit {:order.credit/amount 676.3}}]}} {:order/item {:order-item/type \"some-test-order-item-type-2\", :order-item/price {:order-item/currency :ZAR, :order-item/amount 898}, :order-item/test-dummy \"TD-B2\"}}]}" (pr-str clj-map))))
+      (testing "`to-clj` should map a string"
+        (is (= "a-test-id-1234" (:order/id clj-map))))
+      (testing "`to-clj` should map a number"
+        (is (= 23456.89 (:order/total-amount clj-map))))
+      (testing "`to-clj` should map a value from a nested object"
+        (is (= "MrTesty" (get-in clj-map [:order/user :user/id]))))
+      (testing "`to-clj` should map a value from a nested array"
+        (is (= :EUR (get-in clj-map [:order/items 0 :order/item :order-item/price :order-item/currency])))
+        (is (= :ZAR (get-in clj-map [:order/items 1 :order/item :order-item/price :order-item/currency]))))
+      (testing "`to-clj` should map a value from a property with a different name"
+        (is (= "TD-B2" (get-in clj-map [:order/items 1 :order/item :order-item/test-dummy]))))
+      (testing "`to-clj` should map a value from a nested array in a nested array"
+        (is (= 676.30 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
+                                       0 :order/credit :order.credit/amount])))))))
+
+;; Benchmark run above 2 tests
+(simple-benchmark [] (a-regular-clj-object) 10000)
+(simple-benchmark [] (test-a-js-obj-to-clj) 10000)
 
 (defn- rand-amount [] (* (rand) 100))
 
@@ -129,7 +174,7 @@
           (is (= (str "TD-B" i) (get-in clj-map [:order/items 1 :order/item :order-item/test-dummy]))))
         (testing "`to-clj` given an array, should map a value from a nested array in a nested array"
           (is (< 0 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
-                                         0 :order/credit :order.credit/amount])))))
+                                    0 :order/credit :order.credit/amount])))))
       clj-maps))))
 
 (deftest test-a-clj-map-to-js
