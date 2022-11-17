@@ -17,12 +17,13 @@
   [f1 f2]
   (if-let [absolute (get f2 :absolute)]
     absolute
-    #?(:cljs (path/relative (path/dirname f1) f2)
-       :clj (let [p1 (.resolve (get-path f1)
+    (str "./"
+         #?(:cljs (path/relative (path/dirname f1) f2)
+            :clj (let [p1 (.resolve (get-path f1)
                                ;; quick way to get the parent directory if import has .d.ts extension
-                               (if-not (re-matches #"[.]" f1) ".." "."))
-                  p2 (get-path f2)]
-              (str "./"  (.relativize p1 p2))))))
+                                    (if-not (re-matches #"[.]" f1) ".." "."))
+                       p2 (get-path f2)]
+                   (.relativize p1 p2))))))
 
 (defn- -schema-properties
   [?schema options]
@@ -252,7 +253,7 @@
 #_{:clj-kondo/ignore [:unused-binding]}
 (defmethod provide-jsdoc ::schema
   [jsdoc-k schema-id t-options options]
-  ["schema" (-> schema-id (m/deref options) m/form str)])
+  ["schema" (binding [*print-namespace-maps* true] (-> schema-id (m/deref options) m/form str))])
 
 (defn -jsdoc-literal
   [jsdoc-pairs]
@@ -350,12 +351,12 @@
    (fn [[m-import m-type] [file scheva-type-vectors]]
      [(assoc
        m-import file
-       (map
-        (fn [import-file]
-          (import-literal
-           (import-path-relative file import-file)
-           (get @files-import-alias* (or (:absolute import-file) import-file))))
-        (get @file-imports* file)))
+       (sort (map
+              (fn [import-file]
+                (import-literal
+                 (import-path-relative file import-file)
+                 (get @files-import-alias* (or (:absolute import-file) import-file))))
+              (get @file-imports* file))))
       (assoc
        m-type file
        (map
