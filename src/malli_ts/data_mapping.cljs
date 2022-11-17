@@ -22,10 +22,10 @@
        (some #(= x %))
        nil?))
 
-(defn clj<->js-mapping
+(defn- -clj<>js-mapping
   ([schema key-type]
    (let [*defs (atom {})
-         root  (clj<->js-mapping schema key-type {::*definitions       *defs
+         root  (-clj<>js-mapping schema key-type {::*definitions       *defs
                                                   ::m/walk-schema-refs true
                                                   ::m/walk-refs        true
                                                   ::m/walk-entry-vals  true})]
@@ -44,7 +44,7 @@
           , {::ref (m/-ref schema')}
 
           (= s-type ::m/schema)
-          , (let [result (clj<->js-mapping (m/deref schema') key-type opts)]
+          , (let [result (-clj<>js-mapping (m/deref schema') key-type opts)]
               (if-let [ref (m/-ref schema')]
                 (do
                   (swap! *definitions assoc ref result)
@@ -74,6 +74,8 @@
           :else
           , children)))
     options)))
+
+(def clj<->js-mapping (memoize -clj<>js-mapping))
 
 ;; js/Proxy is a strange creature, neither `type`
 ;; nor `instance?` works for it, probably because
