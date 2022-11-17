@@ -9,15 +9,15 @@
 
 (defn- transform-bean
   [js->clj-mapping
-   clj->js-mapping 
+   clj->js-mapping
    cur-js->clj-mapping
    cur-clj->js-mapping
    x
    _ctx]
 
-  (if (primitive? x)
+  (if-not (or (object? x) (array? x))
     x
-    
+
     (let [{prop :prop, key' :key, nth' :nth} _ctx
           cur-js->clj-mapping (if-let [ref (::mts-dm/ref cur-js->clj-mapping)]
                                 (js->clj-mapping ref)
@@ -47,10 +47,9 @@
           fn-prop->key        (fn [prop] (:key (get new-cur-js->clj-m prop)))
           fn-transform        (fn [v cx] (transform-bean js->clj-mapping clj->js-mapping new-cur-js->clj-m new-cur-clj->js-m v cx))]
 
-      (cond
-        (object? x)    (b/Bean. nil x fn-prop->key fn-key->prop fn-transform true nil nil nil)
-        (array? x)     (b/ArrayVector. nil fn-prop->key fn-key->prop fn-transform x nil)
-        :else          x))))
+      (if (array? x)
+        (b/ArrayVector. nil fn-prop->key fn-key->prop fn-transform x nil)
+        (b/Bean. nil x fn-prop->key fn-key->prop fn-transform true nil nil nil)))))
 
 (defn- to-clj' [x js<->clj-mapping clj->js-mapping]
   (cond
