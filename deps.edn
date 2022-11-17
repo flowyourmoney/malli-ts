@@ -4,7 +4,8 @@
   cljs-bean/cljs-bean                 {:git/url "https://github.com/flowyourmoney/cljs-bean.git"
                                        :git/sha "42698e2f7921334c9ee3461d543117bfc05026bd"}}
 
- :paths ["src" "development" "test"]
+ :paths ["src" "test"]
 
- :aliases {:shadow-cljs {:extra-deps {thheller/shadow-cljs {:mvn/version "2.20.7"}}}
-           :dev         {:extra-paths ["development" "tests"]}}}
+ :aliases {:shadow-cljs {:extra-deps {thheller/shadow-cljs {:mvn/version "2.20.11"}}
+                         :main-opts ["-m" "shadow.cljs.devtools.cli"]}
+           :dev         {:extra-paths ["development"]}}}

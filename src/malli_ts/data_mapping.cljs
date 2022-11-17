@@ -2,10 +2,7 @@
   (:require
    [camel-snake-kebab.core :as csk]
    [malli-ts.core          :as-alias mts]
-   [malli.core             :as m])
-  #?(:cljs
-     (:require
-      [cljs-bean.core :as b :refer [bean bean? ->js ->clj]])))
+   [malli.core             :as m]))
 
 (def complex-types ['seqable?
                     'indexed?
@@ -85,9 +82,3 @@
 (defprotocol IJsProxy)
 (deftype JsProxy []
   IJsProxy)
-
-
-
-
-
-
