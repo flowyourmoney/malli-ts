@@ -2,7 +2,7 @@
  {metosin/malli                       {:mvn/version "0.9.2"}
   camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}
   cljs-bean/cljs-bean                 {:git/url "https://github.com/flowyourmoney/cljs-bean.git"
-                                       :git/sha "1683bf50223ef59f0b93ae3232b8bc61dbb58879"}}
+                                       :git/sha "42698e2f7921334c9ee3461d543117bfc05026bd"}}
 
  :paths ["src" "development" "test"]
 
