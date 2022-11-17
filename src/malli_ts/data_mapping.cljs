@@ -4,23 +4,23 @@
    [malli-ts.core          :as-alias mts]
    [malli.core             :as m]))
 
-(def complex-types ['seqable?
-                    'indexed?
-                    'map?
-                    'vector?
-                    'list?
-                    'seq?
-                    'set?
-                    'empty?
-                    'sequential?
-                    'coll?
-                    'associative?
-                    ::m/val])
+(def complex-types #{'seqable?
+                     'indexed?
+                     'map?
+                     'vector?
+                     'list?
+                     'seq?
+                     'set?
+                     'empty?
+                     'sequential?
+                     'coll?
+                     'associative?
+                     ::m/val})
 
 (defn primitive? [x]
-  (->> complex-types
-       (some #(= x %))
-       nil?))
+  (nil? (complex-types x)))
+
+(defrecord Mapping [key prop schema])
 
 (defn- -clj<>js-mapping
   ([schema key-type]
@@ -36,14 +36,11 @@
     schema
     (fn [schema' path children {::keys [*definitions] :as opts}]
       (let [s-type (m/type schema')]
-        (cond ;; TODO: Should probably rewrite this as a `defmulti`
-          (empty? path)
-          , (first children)
-
-          (= s-type :ref)
+        (case s-type
+          :ref
           , {::ref (m/-ref schema')}
 
-          (= s-type ::m/schema)
+          ::m/schema
           , (let [result (-clj<>js-mapping (m/deref schema') key-type opts)]
               (if-let [ref (m/-ref schema')]
                 (do
@@ -51,28 +48,32 @@
                   {::ref ref})
                 result))
 
-          (and (= s-type :map)
-               (seq children))
-          , (into {}
-                  (for [[k opts s] children]
-                    (let [p (get-in opts [::mts/clj<->js :prop]
-                                    (csk/->camelCaseString k))]
-                      [(if (= :prop key-type) p k)
-                       {:key    k
-                        :prop   p
-                        :schema (first s)}])))
-          (and (= s-type ::m/schema)
-               (sequential? (first children)))
-          , (ffirst children)
-
-          (#{:enum :or} s-type)
+          (:enum :or)
           , (m/form schema')
 
-          (primitive? s-type)
-          , s-type
+          ; else
+          (cond
+            (empty? path)
+            , (first children)
 
-          :else
-          , children)))
+            (and (= s-type :map)
+                 (seq children))
+            , (->> children
+                   (map (fn [[k opts s]]
+                          (let [p (-> opts ::mts/clj<->js :prop (or (csk/->camelCaseString k)))]
+                            [(if (= :prop key-type) p k)
+                             (Mapping. k p (first s))])))
+                   (into {}))
+
+            (and (= s-type ::m/schema)
+                 (sequential? (first children)))
+            , (ffirst children)
+
+            (primitive? s-type)
+            , s-type
+
+            :else
+            , children))))
     options)))
 
 (def clj<->js-mapping (memoize -clj<>js-mapping))
