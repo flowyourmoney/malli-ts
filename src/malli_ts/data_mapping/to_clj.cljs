@@ -3,45 +3,35 @@
    [malli-ts.core          :as-alias mts]
    [malli-ts.data-mapping  :as mts-dm]
    [malli.core             :as m]
-   [cljs-bean.core :as b :refer [bean?]]))
-
-(defn prop->key
-  [js-props->clj-keys prop]
-  (get-in js-props->clj-keys [prop :key]))
-
-(defn- key->prop
-  [current-mapping key']
-  (get-in current-mapping [key' :prop]))
-
-(defn primitive? [x]
-  (or (number? x)
-      (string? x)
-      (boolean? x)
-      (nil? x)))
+   [cljs-bean.core :as b :refer [bean? primitive?]]))
 
 (declare to-clj')
 
 (defn- transform-bean
-  [{:keys [js->clj-mapping
-           clj->js-mapping]
-    :as   mapping} cur-js->clj-mapping cur-clj->js-mapping x
-   {prop :prop, key' :key, nth' :nth, :as _ctx}]
+  [js->clj-mapping
+   clj->js-mapping 
+   cur-js->clj-mapping
+   cur-clj->js-mapping
+   x
+   _ctx]
 
   (if (primitive? x)
     x
-    (let [cur-js->clj-mapping (if-let [ref (get cur-js->clj-mapping ::mts-dm/ref)]
-                                (get js->clj-mapping ref)
+    
+    (let [{prop :prop, key' :key, nth' :nth} _ctx
+          cur-js->clj-mapping (if-let [ref (::mts-dm/ref cur-js->clj-mapping)]
+                                (js->clj-mapping ref)
                                 cur-js->clj-mapping)
 
-          cur-clj->js-mapping (if-let [ref (get cur-clj->js-mapping ::mts-dm/ref)]
-                                (get clj->js-mapping ref)
+          cur-clj->js-mapping (if-let [ref (::mts-dm/ref cur-clj->js-mapping)]
+                                (clj->js-mapping ref)
                                 cur-clj->js-mapping)
 
           new-cur-js->clj-m   (cond
                                 nth'
                                 , cur-js->clj-mapping
                                 cur-js->clj-mapping
-                                , (get-in cur-js->clj-mapping [prop :schema])
+                                , (:schema (cur-js->clj-mapping prop))
                                 :else
                                 , (::mts-dm/root js->clj-mapping))
 
@@ -49,21 +39,20 @@
                                 nth'
                                 , cur-clj->js-mapping
                                 cur-clj->js-mapping
-                                , (get-in cur-clj->js-mapping [key' :schema])
+                                , (:schema (cur-clj->js-mapping key'))
                                 :else
                                 , (::mts-dm/root clj->js-mapping))
 
-          fn-key->prop        (partial key->prop new-cur-clj->js-m)
-          fn-prop->key        (partial prop->key new-cur-js->clj-m)
-          fn-transform        (partial transform-bean mapping new-cur-js->clj-m new-cur-clj->js-m)]
+          fn-key->prop        (fn [key'] (-> new-cur-clj->js-m key' :prop))
+          fn-prop->key        (fn [prop] (:key (get new-cur-js->clj-m prop)))
+          fn-transform        (fn [v cx] (transform-bean js->clj-mapping clj->js-mapping new-cur-js->clj-m new-cur-clj->js-m v cx))]
 
       (cond
-        (primitive? x) x
         (object? x)    (b/Bean. nil x fn-prop->key fn-key->prop fn-transform true nil nil nil)
         (array? x)     (b/ArrayVector. nil fn-prop->key fn-key->prop fn-transform x nil)
         :else          x))))
 
-(defn- to-clj' [x js<->clj-mapping]
+(defn- to-clj' [x js<->clj-mapping clj->js-mapping]
   (cond
     (bean? x)
     , x
@@ -72,16 +61,14 @@
     , (js/goog.object.get x "unwrap/clj" nil)
 
     (or (object? x) (array? x))
-    , (transform-bean js<->clj-mapping nil nil x nil)
+    , (transform-bean js<->clj-mapping clj->js-mapping nil nil x nil)
 
     :else
     x))
 
 (defn ^:export to-clj
-  ([x schema]
-   (let [mapping {:js->clj-mapping (mts-dm/clj<->js-mapping schema :prop)
-                  :clj->js-mapping (mts-dm/clj<->js-mapping schema :key)}]
-     (to-clj' x mapping)))
+  ([x schema] 
+   (to-clj' x (mts-dm/clj<->js-mapping schema :prop) (mts-dm/clj<->js-mapping schema :key)))
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]
