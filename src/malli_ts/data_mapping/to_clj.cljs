@@ -31,7 +31,7 @@
                                 nth'
                                 , cur-js->clj-mapping
                                 cur-js->clj-mapping
-                                , (:schema (cur-js->clj-mapping prop))
+                                , (.-schema (cur-js->clj-mapping prop))
                                 :else
                                 , (::mts-dm/root js->clj-mapping))
 
@@ -39,12 +39,12 @@
                                 nth'
                                 , cur-clj->js-mapping
                                 cur-clj->js-mapping
-                                , (:schema (cur-clj->js-mapping key'))
+                                , (.-schema (cur-clj->js-mapping key'))
                                 :else
                                 , (::mts-dm/root clj->js-mapping))
 
-          fn-key->prop        (fn [key'] (-> new-cur-clj->js-m key' :prop))
-          fn-prop->key        (fn [prop] (:key (get new-cur-js->clj-m prop)))
+          fn-key->prop        (fn [key'] (.-prop (new-cur-clj->js-m key')))
+          fn-prop->key        (fn [prop] (.-key (new-cur-js->clj-m prop)))
           fn-transform        (fn [v cx] (transform-bean js->clj-mapping clj->js-mapping new-cur-js->clj-m new-cur-clj->js-m v cx))]
 
       (if (array? x)
