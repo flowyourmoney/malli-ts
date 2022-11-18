@@ -3,9 +3,7 @@
    [malli-ts.core          :as-alias mts]
    [malli-ts.data-mapping  :as mts-dm]
    [malli.core             :as m]
-   [cljs-bean.core :as b :refer [bean? primitive?]]))
-
-(declare to-clj')
+   [cljs-bean.core :as b :refer [bean?]]))
 
 (defn- transform-bean
   [js->clj-mapping
@@ -15,9 +13,11 @@
    x
    _ctx]
 
-  (if-not (or (object? x) (array? x))
-    x
+  (cond
+    (instance? mts-dm/JsProxy x)
+    (js/goog.object.get x "unwrap/clj" nil)
 
+    (or (object? x) (array? x))
     (let [{prop :prop, key' :key, nth' :nth} _ctx
           cur-js->clj-mapping (if-let [ref (::mts-dm/ref cur-js->clj-mapping)]
                                 (js->clj-mapping ref)
@@ -49,25 +49,15 @@
 
       (if (array? x)
         (b/ArrayVector. nil fn-prop->key fn-key->prop fn-transform x nil)
-        (b/Bean. nil x fn-prop->key fn-key->prop fn-transform true nil nil nil)))))
-
-(defn- to-clj' [x js<->clj-mapping clj->js-mapping]
-  (cond
-    (bean? x)
-    , x
-
-    (instance? mts-dm/JsProxy x)
-    , (js/goog.object.get x "unwrap/clj" nil)
-
-    (or (object? x) (array? x))
-    , (transform-bean js<->clj-mapping clj->js-mapping nil nil x nil)
-
-    :else
-    x))
+        (b/Bean. nil x fn-prop->key fn-key->prop fn-transform true nil nil nil)))
+    
+    :else x))
 
 (defn ^:export to-clj
-  ([x schema] 
-   (to-clj' x (mts-dm/clj<->js-mapping schema :prop) (mts-dm/clj<->js-mapping schema :key)))
+  ([x schema]
+   (transform-bean (mts-dm/clj<->js-mapping schema :prop)
+                   (mts-dm/clj<->js-mapping schema :key)
+                   nil nil x nil))
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]
