@@ -5,15 +5,13 @@
    [malli.core             :as m]
    [cljs-bean.core :as b :refer [bean?]]))
 
-#_(declare ->BeanContext)
-
 (defn unwrap [v]
   (cond
     (instance? mts-dm/JsProxy v) (js/goog.object.get v "unwrap/clj" nil)
     (bean? v) v
     :else nil))
 
-#_(deftype BeanContext [js<->clj-mapping mapping ^:mutable ^malli-ts.data-mapping/Mapping sub-cache]
+(deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
   b/BeanContext
   (keywords? [_] true)
   (key->prop [_ key'] (let [s (mapping key')] (set! sub-cache s) (.-prop s)))
@@ -29,7 +27,7 @@
                 (let [s (.-schema sub-cache)]
                   (if-let [ref (::mts-dm/ref s)] (js<->clj-mapping ref) s)))
               bean-context
-              (->BeanContext js<->clj-mapping sub-mapping nil)]
+              (BeanContext. js<->clj-mapping sub-mapping nil)]
           (if bean'
             (b/Bean. nil v bean-context true nil nil nil)
             (b/ArrayVector. nil bean-context v nil)))
@@ -41,11 +39,11 @@
    (if-some [v (unwrap v)] v 
    ;else
      (if-some [bean' (cond (object? v) true (array? v) false)]
-       (let [root-js<->clj    (::mts-dm/root js<->clj-mapping)]
+       (let [bean-context
+             (BeanContext. js<->clj-mapping (::mts-dm/root js<->clj-mapping) nil)]
          (if bean'
-           (b/Bean. nil v root-js<->clj true nil nil nil)
-           (b/ArrayVector. nil root-js<->clj v nil)
-           ))
+           (b/Bean. nil v bean-context true nil nil nil)
+           (b/ArrayVector. nil bean-context v nil)))
      ;else
        v)))
 

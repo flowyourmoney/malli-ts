@@ -16,7 +16,7 @@
 
 (defn- to-js'
   ([x js->clj-mapping]
-   (to-js' x js->clj-mapping (.-mapping (::mts-dm/root js->clj-mapping))))
+   (to-js' x js->clj-mapping (::mts-dm/root js->clj-mapping)))
   ([x js->clj-mapping cur-js->clj-mapping]
    (cond
      (or (sequential? x)
@@ -38,32 +38,24 @@
      (to-js x (mts-dm/clj<->js-mapping s)))))
 
 (defn- deref-schema [js<->clj-mapping s]
-  (if-let [ref (::mts-dm/ref s)]
-    (do ;(prn 'deref-schema #_#_'(@js<->clj-mapping ref) (@js<->clj-mapping ref) 'ref ref)
-        (js<->clj-mapping ref)) s))
+  (if-let [ref (::mts-dm/ref s)] (js<->clj-mapping ref) s))
 
 (defn- map-proxy-get
   [js->clj-mapping cur-js->clj-mapping target prop]
   (case prop
     "unwrap/clj" target
 
-    (let [;_ (prn 'MAP-PROXY-GET-1 'prop prop 'cur-js->clj-mapping cur-js->clj-mapping)
-          cur-map (cur-js->clj-mapping prop)
-          mapping (deref-schema js->clj-mapping (.-schema cur-map))
-          ;_ (prn 'MAP-PROXY-GET-2 'cur-map cur-map 'mapping mapping)
-          new-cur-js->clj-m (.-mapping mapping)
-          ;_ (prn 'MAP-PROXY-GET-3 'new-cur-js->clj-m new-cur-js->clj-m)
-          ]
-      (-> (.-key cur-map)
+    (let [mapping (cur-js->clj-mapping prop)
+          sub-map (.-schema mapping)]
+      (-> (.-key mapping)
           (target)
-          (to-js' js->clj-mapping new-cur-js->clj-m)))))
+          (to-js' js->clj-mapping sub-map)))))
 
 (defn- map-proxy
   [x js->clj-mapping cur-js->clj-mapping]
   (if (instance? mts-dm/JsProxy x)
     x
-    (let [;_ (prn 'MAP-PROXY-DEREF-SCHEMA cur-js->clj-mapping)
-          cur-js->clj-mapping
+    (let [cur-js->clj-mapping
           (deref-schema js->clj-mapping cur-js->clj-mapping)]
       (js/Proxy. x
                  #js

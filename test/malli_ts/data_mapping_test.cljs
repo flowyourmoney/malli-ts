@@ -271,7 +271,7 @@
    ;; Benchmark run above tests
   (simple-benchmark [] (a-regular-clj-object) 200000)
   (simple-benchmark [] (test-a-js-obj-to-clj) 200000)
-  ;; (simple-benchmark [] (test-a-clj-map-to-js) 200000)
+  (simple-benchmark [] (test-a-clj-map-to-js) 200000)
   (println))
 
 (comment
