@@ -5,7 +5,7 @@
    [malli.core             :as m]
    [cljs-bean.core :as b :refer [bean?]]))
 
-(declare ->BeanContext)
+#_(declare ->BeanContext)
 
 (defn unwrap [v]
   (cond
@@ -13,7 +13,7 @@
     (bean? v) v
     :else nil))
 
-(deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
+#_(deftype BeanContext [js<->clj-mapping mapping ^:mutable ^malli-ts.data-mapping/Mapping sub-cache]
   b/BeanContext
   (keywords? [_] true)
   (key->prop [_ key'] (let [s (mapping key')] (set! sub-cache s) (.-prop s)))
@@ -37,17 +37,14 @@
         v))))
 
 (defn ^:export to-clj
-  ([v schema]
+  ([v js<->clj-mapping]
    (if-some [v (unwrap v)] v 
    ;else
      (if-some [bean' (cond (object? v) true (array? v) false)]
-       (let [bean-context
-             (let [js<->clj-mapping (mts-dm/clj<->js-mapping schema)
-                   root-js<->clj    (::mts-dm/root js<->clj-mapping)]
-               (->BeanContext js<->clj-mapping root-js<->clj nil))]
+       (let [root-js<->clj    (::mts-dm/root js<->clj-mapping)]
          (if bean'
-           (b/Bean. nil v bean-context true nil nil nil)
-           (b/ArrayVector. nil bean-context v nil)
+           (b/Bean. nil v root-js<->clj true nil nil nil)
+           (b/ArrayVector. nil root-js<->clj v nil)
            ))
      ;else
        v)))
@@ -55,7 +52,7 @@
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]
-     (to-clj x s))))
+     (to-clj x (mts-dm/clj<->js-mapping s)))))
 
 (comment
 

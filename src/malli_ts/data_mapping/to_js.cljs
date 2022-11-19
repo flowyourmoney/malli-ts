@@ -16,7 +16,7 @@
 
 (defn- to-js'
   ([x js->clj-mapping]
-   (to-js' x js->clj-mapping (::mts-dm/root js->clj-mapping)))
+   (to-js' x js->clj-mapping (.-mapping (::mts-dm/root js->clj-mapping))))
   ([x js->clj-mapping cur-js->clj-mapping]
    (cond
      (or (sequential? x)
@@ -30,37 +30,50 @@
      , x)))
 
 (defn ^:export to-js
-  ([x schema]
-   (let [mapping (mts-dm/clj<->js-mapping schema)]
-     (to-js' x mapping)))
+  ([x mapping]
+   (to-js' x mapping))
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]
-     (to-js x s))))
+     (to-js x (mts-dm/clj<->js-mapping s)))))
+
+(defn- deref-schema [js<->clj-mapping s]
+  (if-let [ref (::mts-dm/ref s)]
+    (do ;(prn 'deref-schema #_#_'(@js<->clj-mapping ref) (@js<->clj-mapping ref) 'ref ref)
+        (js<->clj-mapping ref)) s))
 
 (defn- map-proxy-get
   [js->clj-mapping cur-js->clj-mapping target prop]
-  (let [cur-js->clj-mapping (if-let [ref (get cur-js->clj-mapping ::mts-dm/ref)]
-                              (get js->clj-mapping ref)
-                              cur-js->clj-mapping)
-        new-cur-js->clj-m   (get-in cur-js->clj-mapping [prop :schema])]
-    (case prop
-      "unwrap/clj" target
+  (case prop
+    "unwrap/clj" target
 
-      (-> cur-js->clj-mapping
-          (get-in [prop :key])
-          (as-> k (get target k))
+    (let [;_ (prn 'MAP-PROXY-GET-1 'prop prop 'cur-js->clj-mapping cur-js->clj-mapping)
+          cur-map (cur-js->clj-mapping prop)
+          mapping (deref-schema js->clj-mapping (.-schema cur-map))
+          ;_ (prn 'MAP-PROXY-GET-2 'cur-map cur-map 'mapping mapping)
+          new-cur-js->clj-m (.-mapping mapping)
+          ;_ (prn 'MAP-PROXY-GET-3 'new-cur-js->clj-m new-cur-js->clj-m)
+          ]
+      (-> (.-key cur-map)
+          (target)
           (to-js' js->clj-mapping new-cur-js->clj-m)))))
 
 (defn- map-proxy
   [x js->clj-mapping cur-js->clj-mapping]
   (if (instance? mts-dm/JsProxy x)
     x
-    (js/Proxy. x
-               #js
-                {:get            (partial map-proxy-get js->clj-mapping cur-js->clj-mapping)
-                 :getPrototypeOf (fn [k]
-                                   (.-prototype mts-dm/JsProxy))})))
+    (let [;_ (prn 'MAP-PROXY-DEREF-SCHEMA cur-js->clj-mapping)
+          cur-js->clj-mapping
+          (deref-schema js->clj-mapping cur-js->clj-mapping)]
+      (js/Proxy. x
+                 #js
+                  {:get            (fn [target prop]
+                                     (map-proxy-get js->clj-mapping
+                                                    cur-js->clj-mapping
+                                                    target
+                                                    prop))
+                   :getPrototypeOf (fn [k]
+                                     (.-prototype mts-dm/JsProxy))}))))
 
 (comment
   (let [order-items-schema [:vector [:map

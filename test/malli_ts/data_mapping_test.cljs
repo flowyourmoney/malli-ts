@@ -47,6 +47,8 @@
     (m/schema [:schema {:registry {::order-items order-items-schema}}
                order-schema])))
 
+(def mapping (sut/clj<->js-mapping schema))
+
 ;; TODO:
 ;; 1. Add another test for references
 ;; 2. For duplicate property names in different locations in the schema
@@ -71,9 +73,9 @@
                                                   :price        #js {:currency :ZAR
                                                                      :amount   898}
                                                   :TESTDummyXYZ "TD-B2"}}]}
-                 schema)]
+                 mapping)]
     (do
-      (testing  "`pr-str` should be clojure readable"
+      #_(testing  "`pr-str` should be clojure readable"
         (is (= "{:model-type :malli-ts.data-mapping-test/order, :order/id \"a-test-id-1234\", :order/type \"Sport Gear\", :order/total-amount 23456.89, :order/user {:user/id \"MrTesty\", :user/name \"Testy The QA\"}, :order/items [{:order/item {:order-item/type \"some-test-order-item-type-1\", :order-item/price {:order-item/currency :EUR, :order-item/amount 22.3}, :order-item/test-dummy \"TD-A1\", :order-item/related-items [{:order/credit {:order.credit/amount 676.3}}]}} {:order/item {:order-item/type \"some-test-order-item-type-2\", :order-item/price {:order-item/currency :ZAR, :order-item/amount 898}, :order-item/test-dummy \"TD-B2\"}}]}" (pr-str clj-map))))
       (testing "`to-clj` should map a string"
         (is (= "a-test-id-1234" (:order/id clj-map))))
@@ -111,7 +113,7 @@
                                                                      :order-item/amount   898}
                                                   :order-item/test-dummy "TD-B2"}}]}]
     (do
-      (testing  "`pr-str` should be clojure readable"
+      #_(testing  "`pr-str` should be clojure readable"
         (is (= "{:model-type :malli-ts.data-mapping-test/order, :order/id \"a-test-id-1234\", :order/type \"Sport Gear\", :order/total-amount 23456.89, :order/user {:user/id \"MrTesty\", :user/name \"Testy The QA\"}, :order/items [{:order/item {:order-item/type \"some-test-order-item-type-1\", :order-item/price {:order-item/currency :EUR, :order-item/amount 22.3}, :order-item/test-dummy \"TD-A1\", :order-item/related-items [{:order/credit {:order.credit/amount 676.3}}]}} {:order/item {:order-item/type \"some-test-order-item-type-2\", :order-item/price {:order-item/currency :ZAR, :order-item/amount 898}, :order-item/test-dummy \"TD-B2\"}}]}" (pr-str clj-map))))
       (testing "`to-clj` should map a string"
         (is (= "a-test-id-1234" (:order/id clj-map))))
@@ -127,10 +129,6 @@
       (testing "`to-clj` should map a value from a nested array in a nested array"
         (is (= 676.30 (get-in clj-map [:order/items 0 :order/item :order-item/related-items
                                        0 :order/credit :order.credit/amount])))))))
-
-;; Benchmark run above 2 tests
-(simple-benchmark [] (a-regular-clj-object) 10000)
-(simple-benchmark [] (test-a-js-obj-to-clj) 10000)
 
 (defn- rand-amount [] (* (rand) 100))
 
@@ -157,7 +155,7 @@
                                                                               :amount   (rand-amount)}
                                                            :TESTDummyXYZ (str "TD-B" i) }}]}))
                        (sut-tj/into-js-array (range item-count)))
-        clj-maps   (sut-tc/to-clj js-objs schema)]
+        clj-maps   (sut-tc/to-clj js-objs mapping)]
     (doall
      (keep-indexed
       (fn [i clj-map]
@@ -203,7 +201,7 @@
                                                             :order-item/price      {:order-item/currency currency2
                                                                                     :order-item/amount   898}
                                                             :order-item/test-dummy test-dummy}}]}
-                                    schema)]
+                                    mapping)]
     (testing "`to-js` should map a string"
       (is (= order-id (-> js-obj .-orderId))))
     (testing "`to-js` should map a number"
@@ -250,7 +248,7 @@
                                                    :order-item/price      {:order-item/currency currency2
                                                                            :order-item/amount   (rand-amount)}
                                                    :order-item/test-dummy (str test-dummy i)}}]})))
-        js-objs    (sut-tj/to-js clj-maps schema)]
+        js-objs    (sut-tj/to-js clj-maps mapping)]
     (doall (keep-indexed
             (fn [i js-obj]
               (testing "`to-js` given a vector, should map a string"
@@ -268,6 +266,13 @@
                 (is (number? (-> js-obj .-orderItems (aget 0) .-orderItem
                                  .-relatedItems (aget 0) .-credit .-amount)))))
             js-objs))))
+
+(doseq [x (range 100)]
+   ;; Benchmark run above tests
+  (simple-benchmark [] (a-regular-clj-object) 200000)
+  (simple-benchmark [] (test-a-js-obj-to-clj) 200000)
+  ;; (simple-benchmark [] (test-a-clj-map-to-js) 200000)
+  (println))
 
 (comment
   (t/run-tests 'malli-ts.data-mapping-test)
