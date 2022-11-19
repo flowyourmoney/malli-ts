@@ -23,15 +23,17 @@
 (defrecord Mapping [key prop schema])
 
 (defn- -clj<>js-mapping
-  ([schema key-type]
-   (let [*defs (atom {})
-         root  (-clj<>js-mapping schema key-type {::*definitions       *defs
-                                                  ::m/walk-schema-refs true
-                                                  ::m/walk-refs        true
-                                                  ::m/walk-entry-vals  true})]
-     (merge {::root root}
-            @*defs)))
-  ([schema key-type options]
+  ([schema]
+   (let [*defs (atom (transient {}))
+         root  (-clj<>js-mapping schema {::*definitions       *defs
+                                         ::m/walk-schema-refs true
+                                         ::m/walk-refs        true
+                                         ::m/walk-entry-vals  true})]
+     (-> @*defs
+         (assoc! ::root root)
+         (persistent!))))
+
+  ([schema options]
    (m/walk
     schema
     (fn [schema' path children {::keys [*definitions] :as opts}]
@@ -41,10 +43,10 @@
           , {::ref (m/-ref schema')}
 
           ::m/schema
-          , (let [result (-clj<>js-mapping (m/deref schema') key-type opts)]
+          , (let [result (-clj<>js-mapping (m/deref schema') opts)]
               (if-let [ref (m/-ref schema')]
                 (do
-                  (swap! *definitions assoc ref result)
+                  (swap! *definitions assoc! ref result)
                   {::ref ref})
                 result))
 
@@ -59,11 +61,13 @@
             (and (= s-type :map)
                  (seq children))
             , (->> children
-                   (map (fn [[k opts s]]
-                          (let [p (-> opts ::mts/clj<->js :prop (or (csk/->camelCaseString k)))]
-                            [(if (= :prop key-type) p k)
-                             (Mapping. k p (first s))])))
-                   (into {}))
+                   (reduce
+                    (fn [x [k opts s]]
+                      (let [p (-> opts ::mts/clj<->js :prop (or (csk/->camelCaseString k)))
+                            m (Mapping. k p (first s))]
+                        (assoc! x, k m, p m)))
+                    (transient {}))
+                   (persistent!))
 
             (and (= s-type ::m/schema)
                  (sequential? (first children)))

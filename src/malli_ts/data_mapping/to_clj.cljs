@@ -5,59 +5,53 @@
    [malli.core             :as m]
    [cljs-bean.core :as b :refer [bean?]]))
 
-(defn- transform-bean
-  [js->clj-mapping
-   clj->js-mapping
-   cur-js->clj-mapping
-   cur-clj->js-mapping
-   x
-   _ctx]
+(declare ->BeanContext)
 
+(defn unwrap [v]
   (cond
-    (instance? mts-dm/JsProxy x)
-    (js/goog.object.get x "unwrap/clj" nil)
+    (instance? mts-dm/JsProxy v) (js/goog.object.get v "unwrap/clj" nil)
+    (bean? v) v
+    :else nil))
 
-    (or (object? x) (array? x))
-    (let [{prop :prop, key' :key, nth' :nth} _ctx
-          cur-js->clj-mapping (if-let [ref (::mts-dm/ref cur-js->clj-mapping)]
-                                (js->clj-mapping ref)
-                                cur-js->clj-mapping)
-
-          cur-clj->js-mapping (if-let [ref (::mts-dm/ref cur-clj->js-mapping)]
-                                (clj->js-mapping ref)
-                                cur-clj->js-mapping)
-
-          new-cur-js->clj-m   (cond
-                                nth'
-                                , cur-js->clj-mapping
-                                cur-js->clj-mapping
-                                , (.-schema (cur-js->clj-mapping prop))
-                                :else
-                                , (::mts-dm/root js->clj-mapping))
-
-          new-cur-clj->js-m   (cond
-                                nth'
-                                , cur-clj->js-mapping
-                                cur-clj->js-mapping
-                                , (.-schema (cur-clj->js-mapping key'))
-                                :else
-                                , (::mts-dm/root clj->js-mapping))
-
-          fn-key->prop        (fn [key'] (.-prop (new-cur-clj->js-m key')))
-          fn-prop->key        (fn [prop] (.-key (new-cur-js->clj-m prop)))
-          fn-transform        (fn [v cx] (transform-bean js->clj-mapping clj->js-mapping new-cur-js->clj-m new-cur-clj->js-m v cx))]
-
-      (if (array? x)
-        (b/ArrayVector. nil fn-prop->key fn-key->prop fn-transform x nil)
-        (b/Bean. nil x fn-prop->key fn-key->prop fn-transform true nil nil nil)))
-    
-    :else x))
+(deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
+  b/BeanContext
+  (keywords? [_] true)
+  (key->prop [_ key'] (let [s (mapping key')] (set! sub-cache s) (.-prop s)))
+  (prop->key [_ prop] (let [s (mapping prop)] (set! sub-cache s) (.-key s)))
+  (transform [_ v prop key' nth']
+    (if-some [v (unwrap v)] v
+    ;else
+      (if-some [bean' (cond (object? v) true (array? v) false)]
+        (let [sub-mapping
+              (if nth'
+                mapping
+              ;else
+                (let [s (.-schema sub-cache)]
+                  (if-let [ref (::mts-dm/ref s)] (js<->clj-mapping ref) s)))
+              bean-context
+              (->BeanContext js<->clj-mapping sub-mapping nil)]
+          (if bean'
+            (b/Bean. nil v bean-context true nil nil nil)
+            (b/ArrayVector. nil bean-context v nil)))
+      ;else
+        v))))
 
 (defn ^:export to-clj
-  ([x schema]
-   (transform-bean (mts-dm/clj<->js-mapping schema :prop)
-                   (mts-dm/clj<->js-mapping schema :key)
-                   nil nil x nil))
+  ([v schema]
+   (if-some [v (unwrap v)] v 
+   ;else
+     (if-some [bean' (cond (object? v) true (array? v) false)]
+       (let [bean-context
+             (let [js<->clj-mapping (mts-dm/clj<->js-mapping schema)
+                   root-js<->clj    (::mts-dm/root js<->clj-mapping)]
+               (->BeanContext js<->clj-mapping root-js<->clj nil))]
+         (if bean'
+           (b/Bean. nil v bean-context true nil nil nil)
+           (b/ArrayVector. nil bean-context v nil)
+           ))
+     ;else
+       v)))
+
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]

@@ -21,7 +21,7 @@
    (cond
      (or (sequential? x)
          (set? x))
-     , (into-js-array (map #(to-js' %  js->clj-mapping cur-js->clj-mapping)) x)
+     , (into-js-array (map #(to-js' % js->clj-mapping cur-js->clj-mapping)) x)
 
      (associative? x)
      , (map-proxy x js->clj-mapping cur-js->clj-mapping)
@@ -31,7 +31,7 @@
 
 (defn ^:export to-js
   ([x schema]
-   (let [mapping (mts-dm/clj<->js-mapping schema :prop)]
+   (let [mapping (mts-dm/clj<->js-mapping schema)]
      (to-js' x mapping)))
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
