@@ -267,11 +267,11 @@
                                  .-relatedItems (aget 0) .-credit .-amount)))))
             js-objs))))
 
-(doseq [x (range 100)]
+(doseq [x (range 7)]
    ;; Benchmark run above tests
-  (simple-benchmark [] (a-regular-clj-object) 200000)
-  (simple-benchmark [] (test-a-js-obj-to-clj) 200000)
-  (simple-benchmark [] (test-a-clj-map-to-js) 200000)
+  (simple-benchmark [] (a-regular-clj-object) 10000)
+  (simple-benchmark [] (test-a-js-obj-to-clj) 10000)
+  (simple-benchmark [] (test-a-clj-map-to-js) 10000)
   (println))
 
 (comment
