@@ -185,7 +185,7 @@
         credit-amount 676.30
         js-obj        (sut-tj/to-js {:model-type         ::order
                                      :order/id           order-id
-                                     :order/type         "a-test-wf-type"
+                                     :order/type         "Sport Gear"
                                      :order/total-amount total-amount
                                      :order/user         {:user/id   user-id
                                                           :user/name "Testy The QA"}

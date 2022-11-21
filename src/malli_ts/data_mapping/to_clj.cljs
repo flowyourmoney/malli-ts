@@ -7,7 +7,7 @@
 
 (defn unwrap [v]
   (cond
-    (instance? mts-dm/JsProxy v) (js/goog.object.get v "unwrap/clj" nil)
+    (instance? mts-dm/JsProxy v) (unchecked-get v "unwrap/clj")
     (bean? v) v
     :else nil))
 
