@@ -4,18 +4,11 @@
    [malli-ts.data-mapping  :as mts-dm]
    [malli.core             :as m]))
 
-(defn- array-push
-  ([res] res)
-  ([res x] (doto res (.push x))))
-
-(defn into-js-array
-  [xform from]
-  (transduce xform array-push (array) from))
-
 (declare to-js')
 
 (deftype JsProxy [js->clj-mapping cur-js->clj-mapping]
   mts-dm/IJsProxy
+
   Object
   (get [self target prop]
     (case prop
@@ -38,54 +31,20 @@
 
      (or (sequential? x)
          (set? x))
-     , (into-js-array (map #(to-js' % js->clj-mapping cur-js->clj-mapping)) x)
-     #_, (mapv #(to-js' % js->clj-mapping cur-js->clj-mapping) x)
-     #_, (into-js-array (map #(to-js' % js->clj-mapping cur-js->clj-mapping)) x)
-     #_(apply array (map #(to-js' % js->clj-mapping cur-js->clj-mapping) x)) 
      , (let [len (count x)
-             arr (js/Array. len)
-             #_#_i (atom -1)]
-         #_(transduce (map #(to-js' % js->clj-mapping cur-js->clj-mapping))
-                      (fn [res x] (aset res @i x))
-                      arr x)
-         
+             arr (js/Array. len)]
          (loop [i 0 x (seq x)]
            (if x
              (let [[v & rest] x]
                (aset arr i (to-js' v js->clj-mapping cur-js->clj-mapping))
                (recur (inc i) rest))
-             arr)) #_
-                        #_(doseq [v x]
-                            (aset arr (swap! i inc) (to-js' v js->clj-mapping cur-js->clj-mapping)))
-                        arr)
-     #_
-       , (let [mapping (if-let [ref (::mts-dm/ref cur-js->clj-mapping)] (js->clj-mapping ref)
-                               #_else cur-js->clj-mapping)
-               arr     (js/Array. (count x))]
-           #_(mapv #(to-js' % js->clj-mapping mapping) x) ; #_#_
-           (-> (fn [k v] (aset arr k (to-js' v js->clj-mapping mapping)))
-               (map-indexed x)
-               (doall))
-           arr)
+             arr)))
 
      (associative? x)
      , (let [cur-js->clj-mapping
-             (if-let [ref (::mts-dm/ref cur-js->clj-mapping)] (js->clj-mapping ref)
-                     cur-js->clj-mapping)]
-         (js/Proxy. x
-                    (JsProxy. js->clj-mapping cur-js->clj-mapping)
-                    #_
-                      #js{:get
-                          (fn [target prop]
-                            (case prop
-                              "unwrap/clj" target
-                              (let [mapping (cur-js->clj-mapping prop)
-                                    sub-map (.-schema mapping)]
-                                (-> (target (.-key mapping))
-                                    (to-js' js->clj-mapping sub-map)))))
-                          :getPrototypeOf
-                          (fn [k]
-                            (.-prototype mts-dm/JsProxy))}))
+             (if-let [ref (::mts-dm/ref cur-js->clj-mapping)](js->clj-mapping ref)
+              #_else cur-js->clj-mapping)]
+         (js/Proxy. x (JsProxy. js->clj-mapping cur-js->clj-mapping)))
 
      :else
      , x)))

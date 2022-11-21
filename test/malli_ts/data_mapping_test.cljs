@@ -134,27 +134,30 @@
 
 (deftest test-js-objs-to-clj
   (let [item-count 20
-        js-objs    (-> (map
-                        (fn [i]
-                          #js {:modelType   ::order
-                               :orderId     (str "a-test-id-" i)
-                               :orderType   (str "a-test-wf-type" i)
-                               :totalAmount (rand-amount)
-                               :user        #js {:userId (str "MrTesty" i)
-                                                 :name   (str "Testy The QA" i)}
-                               :orderItems  #js [#js {:orderItem
-                                                      #js {:type         (str "some-test-order-item-type-A" i)
-                                                           :price        #js {:currency :EUR
-                                                                              :amount   (rand-amount)}
-                                                           :TESTDummyXYZ (str "TD-A" i)
-                                                           :relatedItems #js [#js {:credit
-                                                                                   #js {:amount (inc (rand-amount))}}]}}
-                                                 #js {:orderItem
-                                                      #js {:type         (str "some-test-order-item-type-B" i)
-                                                           :price        #js {:currency :ZAR
-                                                                              :amount   (rand-amount)}
-                                                           :TESTDummyXYZ (str "TD-B" i) }}]}))
-                       (sut-tj/into-js-array (range item-count)))
+        js-objs
+        (->>
+         (range item-count)
+         (map
+          (fn [i]
+            #js {:modelType   ::order
+                 :orderId     (str "a-test-id-" i)
+                 :orderType   (str "a-test-wf-type" i)
+                 :totalAmount (rand-amount)
+                 :user        #js {:userId (str "MrTesty" i)
+                                   :name   (str "Testy The QA" i)}
+                 :orderItems  #js [#js {:orderItem
+                                        #js {:type         (str "some-test-order-item-type-A" i)
+                                             :price        #js {:currency :EUR
+                                                                :amount   (rand-amount)}
+                                             :TESTDummyXYZ (str "TD-A" i)
+                                             :relatedItems #js [#js {:credit
+                                                                     #js {:amount (inc (rand-amount))}}]}}
+                                   #js {:orderItem
+                                        #js {:type         (str "some-test-order-item-type-B" i)
+                                             :price        #js {:currency :ZAR
+                                                                :amount   (rand-amount)}
+                                             :TESTDummyXYZ (str "TD-B" i)}}]}))
+         (apply array))
         clj-maps   (sut-tc/to-clj js-objs mapping)]
     (doall
      (keep-indexed
