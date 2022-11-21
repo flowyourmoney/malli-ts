@@ -206,19 +206,19 @@
                                                             :order-item/test-dummy test-dummy}}]}
                                     mapping)]
     (testing "`to-js` should map a string"
-      (is (= order-id (-> js-obj .-orderId))))
+      (is (= order-id (aget js-obj "orderId"))))
     (testing "`to-js` should map a number"
-      (is (= total-amount (-> js-obj .-totalAmount))))
+      (is (= total-amount (aget js-obj "totalAmount"))))
     (testing "`to-js` should map a value from a nested map"
-      (is (= user-id (-> js-obj .-user .-userId))))
+      (is (= user-id (aget js-obj "user" "userId"))))
     (testing "`to-js` should map a value from a nested vector"
-      (is (= currency1 (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
-      (is (= currency2 (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+      (is (= currency1 (aget js-obj "orderItems" 0 "orderItem" "price" "currency")))
+      (is (= currency2 (aget js-obj "orderItems" 1 "orderItem" "price" "currency"))))
     (testing "`to-js` should map a value to a property with a different name"
-      (is (= test-dummy (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+      (is (= test-dummy (aget js-obj "orderItems" 1 "orderItem"  "TESTDummyXYZ"))))
     (testing "`to-js` should map a value from a nested vector in a nested vector"
-      (is (= credit-amount (-> js-obj .-orderItems (aget 0) .-orderItem .-relatedItems
-                               (aget 0) .-credit .-amount))))))
+      (is (= credit-amount
+             (aget js-obj "orderItems" 0 "orderItem" "relatedItems" 0 "credit" "amount"))))))
 
 (deftest test-clj-maps-to-js
   (let [item-count 20
@@ -255,19 +255,19 @@
     (doall (keep-indexed
             (fn [i js-obj]
               (testing "`to-js` given a vector, should map a string"
-                (is (=  (str order-id i) (-> js-obj .-orderId))))
+                (is (=  (str order-id i) (aget js-obj 'orderId))))
               (testing "`to-js` given a vector, should map a number"
-                (is (number? (-> js-obj .-totalAmount))))
+                (is (number? (aget js-obj "totalAmount"))))
               (testing  "`to-js` given a vector, should map a value from a nested map"
-                (is (= (str user-id i) (-> js-obj .-user .-userId))))
+                (is (= (str user-id i) (aget js-obj "user" "userId"))))
               (testing  "`to-js` given a vector, should map a value from a nested verctor"
-                (is (= currency1 (-> js-obj .-orderItems (aget 0) .-orderItem .-price .-currency)))
-                (is (= currency2 (-> js-obj .-orderItems (aget 1) .-orderItem .-price .-currency))))
+                (is (= currency1 (aget js-obj "orderItems" 0 "orderItem" "price" "currency")))
+                (is (= currency2 (aget js-obj "orderItems" 1 "orderItem" "price" "currency"))))
               (testing  "`to-js` given a vector, should map a value to a property with a different name"
-                (is (= (str test-dummy i) (-> js-obj .-orderItems (aget 1) .-orderItem  .-TESTDummyXYZ))))
+                (is (= (str test-dummy i) (aget js-obj "orderItems" 1 "orderItem"  "TESTDummyXYZ"))))
               (testing "`to-js` should map a value from a nested vector in a nested vector"
-                (is (number? (-> js-obj .-orderItems (aget 0) .-orderItem
-                                 .-relatedItems (aget 0) .-credit .-amount)))))
+                (is (number? (aget js-obj "orderItems" 0
+                                   "orderItem" "relatedItems" 0 "credit" "amount")))))
             js-objs))))
 
 (doseq [x (range 7)]

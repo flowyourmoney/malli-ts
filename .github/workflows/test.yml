@@ -33,3 +33,6 @@ jobs:
         
       - name: Run Unit tests (ClojureScript)
         run: clojure -M:shadow-cljs compile test
+
+      - name: Run Unit tests (ClojureScript - Advanced compilation)
+        run: clojure -M:shadow-cljs release test
