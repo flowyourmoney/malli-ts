@@ -12,12 +12,11 @@
     (case prop
       "unwrap/clj" target
       (or (unchecked-get this prop)
-          (let [mapping (cur-js->clj-mapping prop)
-                proxy (to-js' (target (.-key mapping))
-                              js->clj-mapping (.-schema mapping))]
-            ;; cache proxy as `this[prop]`
-            (unchecked-set this prop proxy)
-            proxy)))) 
+          (when-let [mapping (cur-js->clj-mapping prop)]
+            (let [proxy (to-js' (target (.-key mapping)) js->clj-mapping (.-schema mapping))]
+              ;; cache proxy as `this[prop]`
+              (unchecked-set this prop proxy)
+              proxy)))))
   (getPrototypeOf [this]
     (.-prototype this)))
 
