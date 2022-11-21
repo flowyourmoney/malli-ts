@@ -25,8 +25,14 @@ jobs:
       - name: Install clojure tools
         uses: DeLaGuardo/setup-clojure@9.5
         with:
+          cli: latest
           lein: 2.9.8
 
-      - name: Run Unit tests
+      - name: Run Unit tests (Clojure)
         run: lein test
         
+      - name: Run Unit tests (ClojureScript)
+        run: clojure -M:shadow-cljs compile test
+
+      - name: Run Unit tests (ClojureScript - Advanced compilation)
+        run: clojure -M:shadow-cljs release test

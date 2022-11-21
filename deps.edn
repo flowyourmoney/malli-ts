@@ -1,7 +1,11 @@
 {:deps
- {metosin/malli {:mvn/version "0.9.2"}
-  camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}}
- 
- :paths ["src"]
- 
- :aliases {:dev {:extra-paths ["development" "tests"]}}}
+ {metosin/malli                       {:mvn/version "0.9.2"}
+  camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.2"}
+  cljs-bean/cljs-bean                 {:git/url "https://github.com/flowyourmoney/cljs-bean.git"
+                                       :git/sha "0c4a2ceb5dac86fac716558d804a0cd3bbea2e4c"}}
+
+ :paths ["src" "test"]
+
+ :aliases {:shadow-cljs {:extra-deps {thheller/shadow-cljs {:mvn/version "2.20.11"}}
+                         :main-opts ["-m" "shadow.cljs.devtools.cli"]}
+           :dev         {:extra-paths ["development"]}}}
