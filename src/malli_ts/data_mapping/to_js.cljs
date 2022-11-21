@@ -16,7 +16,7 @@
                 proxy (to-js' (target (.-key mapping))
                               js->clj-mapping (.-schema mapping))]
             ;; cache proxy as `this[prop]`
-            (aset this prop proxy)
+            (unchecked-set this prop proxy)
             proxy)))) 
   (getPrototypeOf [this]
     (.-prototype this)))
@@ -36,8 +36,8 @@
          (loop [i 0 x (seq x)]
            (if x
              (let [[v & rest] x]
-               (aset arr i (to-js' v js->clj-mapping cur-js->clj-mapping))
-               (recur (inc i) rest))
+               (unchecked-set arr i (to-js' v js->clj-mapping cur-js->clj-mapping))
+               (recur (unchecked-inc i) rest))
              arr)))
 
      (associative? x)
