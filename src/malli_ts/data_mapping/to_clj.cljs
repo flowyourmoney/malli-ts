@@ -1,15 +1,13 @@
 (ns malli-ts.data-mapping.to-clj
   (:require
-   [malli-ts.core          :as-alias mts]
-   [malli-ts.data-mapping  :as mts-dm]
-   [malli.core             :as m]
+   [malli-ts.core               :as-alias mts]
+   [malli-ts.data-mapping       :as mts-dm]
+   [malli.core :as m]
    [cljs-bean.core :as b :refer [bean?]]))
 
 (defn unwrap [v]
-  (cond
-    (instance? mts-dm/JsProxy v) (unchecked-get v "unwrap/clj")
-    (bean? v) v
-    :else nil))
+  (or (unchecked-get v "unwrap/clj")
+      (when (bean? v) v)))
 
 (deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
   b/BeanContext

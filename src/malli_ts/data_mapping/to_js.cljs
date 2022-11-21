@@ -7,26 +7,26 @@
 (declare to-js')
 
 (deftype JsProxy [js->clj-mapping cur-js->clj-mapping]
-  mts-dm/IJsProxy
-
   Object
-  (get [self target prop]
+  (get [this target prop]
     (case prop
       "unwrap/clj" target
-      (or (unchecked-get self prop)
+      (or (unchecked-get this prop)
           (let [mapping (cur-js->clj-mapping prop)
-                sub-map (.-schema mapping)
-                proxy (-> (target (.-key mapping))
-                          (to-js' js->clj-mapping sub-map))]
-                   (aset self prop proxy)
-                   proxy)))) 
-  (getPrototypeOf [self]
-    (.-prototype self)))
+                proxy (to-js' (target (.-key mapping))
+                              js->clj-mapping (.-schema mapping))]
+            ;; cache proxy as `this[prop]`
+            (aset this prop proxy)
+            proxy)))) 
+  (getPrototypeOf [this]
+    (.-prototype this)))
 
 (defn- to-js'
   ([x js->clj-mapping cur-js->clj-mapping]
    (cond
-     (instance? JsProxy x)
+     ;; If the "unwrap/clj" property exists, x is already wrapped
+     ;; Cast to boolean for unwrapped JS truthyness check
+     ^boolean (unchecked-get x "unwrap/clj")
      , x
 
      (or (sequential? x)
@@ -42,7 +42,7 @@
 
      (associative? x)
      , (let [cur-js->clj-mapping
-             (if-let [ref (::mts-dm/ref cur-js->clj-mapping)](js->clj-mapping ref)
+             (if-let [ref (::mts-dm/ref cur-js->clj-mapping)] (js->clj-mapping ref)
               #_else cur-js->clj-mapping)]
          (js/Proxy. x (JsProxy. js->clj-mapping cur-js->clj-mapping)))
 

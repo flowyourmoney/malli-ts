@@ -81,11 +81,3 @@
     options)))
 
 (def clj<->js-mapping (memoize -clj<>js-mapping))
-
-;; js/Proxy is a strange creature, neither `type`
-;; nor `instance?` works for it, probably because
-;; a Proxy doesn't have `Proxy.prototype` & has
-;; transparent virtualization.
-(defprotocol IJsProxy)
-(deftype JsProxy []
-  IJsProxy)
