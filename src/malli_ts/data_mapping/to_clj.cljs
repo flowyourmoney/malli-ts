@@ -6,8 +6,9 @@
    [cljs-bean.core :as b :refer [bean?]]))
 
 (defn unwrap [v]
-  (or (unchecked-get v "unwrap/clj")
-      (when (bean? v) v)))
+  (when v
+    (or (unchecked-get v "unwrap/clj")
+        (when (bean? v) v))))
 
 (deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
   b/BeanContext
