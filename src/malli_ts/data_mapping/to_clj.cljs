@@ -13,8 +13,8 @@
 (deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
   b/BeanContext
   (keywords? [_] true)
-  (key->prop [_ key'] (if-let [s (mapping key')] (do (set! sub-cache s) (.-prop s)) (name key')))
-  (prop->key [_ prop] (if-let [s (mapping prop)] (do (set! sub-cache s) (.-key s)) (keyword prop)))
+  (key->prop [_ key'] (let [s (mapping key')] (set! sub-cache s) (if s (.-prop s) (name key'))))
+  (prop->key [_ prop] (let [s (mapping prop)] (set! sub-cache s) (if s (.-key s) (keyword prop))))
   (transform [_ v prop key' nth']
     (if-some [v (unwrap v)] v
     ;else
