@@ -6,17 +6,42 @@
 
 (declare to-js')
 
+(defn- get-prop [js->clj-mapping cur-js->clj-mapping this target prop]
+  (case prop
+    (let [mapping (when cur-js->clj-mapping (cur-js->clj-mapping prop))
+          m-prop (if mapping (.-key mapping) #_else (keyword prop))
+          value (get target m-prop ::not-found)]
+      (if (= value ::not-found) value
+        ;else
+          (or (unchecked-get this prop)
+              (let [proxy (to-js' value js->clj-mapping (:schema mapping))]
+              ;; cache proxy as `this[prop]`
+                (unchecked-set this prop proxy)
+                proxy))))))
+
 (deftype JsProxy [js->clj-mapping cur-js->clj-mapping]
   Object
+  (ownKeys [this target]
+    (if cur-js->clj-mapping
+      (->> (keys target)
+           (map (fn [k] (-> (cur-js->clj-mapping k)
+                            :prop 
+                            (or (if (keyword? k) (name k) #_else (str k))))))
+           (apply array))
+     ;else
+      (apply array (map #(if (keyword? %) (name %) #_else (str %)) (keys target)))))
+  (getOwnPropertyDescriptor [this target prop]
+    (let [v (get-prop js->clj-mapping cur-js->clj-mapping this target prop)]
+      (if (= v ::not-found)
+        #js {:value nil, :writable false, :enumerable false, :configurable true}
+       ;else
+        #js {:value v, :writable false, :enumerable true, :configurable true})))
   (get [this target prop]
     (case prop
       "unwrap/clj" target
       (or (unchecked-get this prop)
-          (when-let [mapping (cur-js->clj-mapping prop)]
-            (let [proxy (to-js' (target (.-key mapping)) js->clj-mapping (.-schema mapping))]
-              ;; cache proxy as `this[prop]`
-              (unchecked-set this prop proxy)
-              proxy)))))
+          (let [v (get-prop js->clj-mapping cur-js->clj-mapping this target prop)]
+            (if (= v ::not-found) nil #_else v)))))
   (getPrototypeOf [this]
     ; Javascript requires object or explicit null value and will crash on undefined:
     (or (.-prototype this) (.-prototype js/Object))))
