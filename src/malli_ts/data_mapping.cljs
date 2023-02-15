@@ -50,15 +50,12 @@
                   {::ref ref})
                 result))
 
-          (:set :sequential :vector)
+          (:schema :set :sequential :vector)
           , (first children)
-          
+
           (:enum :or)
           , (m/form schema')
 
-          :schema
-          , (first children)
-          
           :map-of
           , (second children)
 
