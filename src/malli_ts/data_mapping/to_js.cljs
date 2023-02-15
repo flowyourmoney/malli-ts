@@ -18,7 +18,8 @@
               (unchecked-set this prop proxy)
               proxy)))))
   (getPrototypeOf [this]
-    (.-prototype this)))
+    ; Javascript requires object or explicit null value and will crash on undefined:
+    (or (.-prototype this) (.-prototype js/Object))))
 
 (defn- to-js'
   ([x js->clj-mapping cur-js->clj-mapping]
@@ -40,21 +41,24 @@
              arr)))
 
      (associative? x)
-     , (let [cur-js->clj-mapping
+     , (let [nested-mapping
              (if-let [ref (::mts-dm/ref cur-js->clj-mapping)] (js->clj-mapping ref)
               #_else cur-js->clj-mapping)]
-         (js/Proxy. x (JsProxy. js->clj-mapping cur-js->clj-mapping)))
+         (js/Proxy. x (JsProxy. js->clj-mapping (when (map? nested-mapping) nested-mapping))))
 
      :else
      , x)))
 
 (defn ^:export to-js
   ([x mapping]
-   (to-js' x mapping (::mts-dm/root mapping)))
+   (let [cur (::mts-dm/root mapping)
+         cur (if-let [ref (::mts-dm/ref cur)] (mapping ref) #_else cur)]
+     (to-js' x mapping cur)))
   ([x registry schema]
    (let [s (m/schema [:schema {:registry registry}
-                      schema])]
-     (to-js x (mts-dm/clj<->js-mapping s)))))
+                      schema])
+         m (mts-dm/clj<->js-mapping s)]
+     (to-js x m))))
 
 (comment
   (let [order-items-schema [:vector [:map
