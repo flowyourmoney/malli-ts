@@ -50,6 +50,9 @@
                   {::ref ref})
                 result))
 
+          (:set :sequential :vector)
+          , (first children)
+          
           (:enum :or)
           , (m/form schema')
 
