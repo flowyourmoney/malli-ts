@@ -53,13 +53,15 @@
           (:enum :or)
           , (m/form schema')
 
+          :schema
+          , (first children)
+          
+          :map-of
+          , (second children)
+
           ; else
           (cond
-            (empty? path)
-            , (first children)
-
-            (and (= s-type :map)
-                 (seq children))
+            (= s-type :map)
             , (->> children
                    (reduce
                     (fn [x [k opts s]]
@@ -69,9 +71,8 @@
                     (transient {}))
                    (persistent!))
 
-            (and (= s-type ::m/schema)
-                 (sequential? (first children)))
-            , (ffirst children)
+            (empty? path)
+            , (first children)
 
             (primitive? s-type)
             , s-type

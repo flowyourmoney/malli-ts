@@ -49,6 +49,18 @@
 
 (def mapping (sut/clj<->js-mapping schema))
 
+(deftest root-reference
+  (let [root (m/schema [:schema {:registry {::root schema}} ::root])
+        clj-map
+        {:model-type   ::order
+         :order/id     "a-root-id-1234"
+         :order/type   "Reference Gear"} 
+        js-obj (sut-tj/to-js clj-map {} root)]
+    (testing "to-js with a one-off mapping to root reference should work"
+      (is (m/validate root clj-map))
+      (is (= "Reference Gear" (:order/type clj-map)))
+      (is (= "Reference Gear" (aget js-obj "orderType"))))))
+
 ;; TODO:
 ;; 1. Add another test for references
 ;; 2. For duplicate property names in different locations in the schema
