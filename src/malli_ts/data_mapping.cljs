@@ -59,18 +59,18 @@
           :map-of
           , (second children)
 
+          :map
+          , (->> children
+                 (reduce
+                  (fn [x [k opts s]]
+                    (let [p (-> opts ::mts/clj<->js :prop (or (csk/->camelCaseString k)))
+                          m (Mapping. k p (first s))]
+                      (assoc! x, k m, p m)))
+                  (transient {}))
+                 (persistent!))
+
           ; else
           (cond
-            (= s-type :map)
-            , (->> children
-                   (reduce
-                    (fn [x [k opts s]]
-                      (let [p (-> opts ::mts/clj<->js :prop (or (csk/->camelCaseString k)))
-                            m (Mapping. k p (first s))]
-                        (assoc! x, k m, p m)))
-                    (transient {}))
-                   (persistent!))
-
             (empty? path)
             , (first children)
 
