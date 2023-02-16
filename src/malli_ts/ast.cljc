@@ -1,5 +1,7 @@
 (ns malli-ts.ast
-  (:require [malli.core :as m]))
+  (:require [camel-snake-kebab.core :as csk]
+            [malli.core :as m]
+            [malli-ts.core :as-alias mts]))
 
 (defprotocol TsSchema
   (-parse-schema-node [this children options]
@@ -84,12 +86,20 @@
 
 (defmethod parse-schema-node ::m/val [_ _ children _] (first children))
 
-(defmethod parse-schema-node :map [_ _ children _]
+(defmethod parse-schema-node :map [_ _ children {:keys [default-to-camel-case] :as options}]
   (let [get-optional (fn [m] (or (get m :optional) (get m "optional")))
         optional-xf (comp (filter (m/-comp get-optional second)) (map first))
         optional (into #{} optional-xf children)
         object {:type :object
-                :properties (apply array-map (mapcat (fn [[k _ s]] [k s]) children))}]
+                :properties (->> children
+                                 (mapcat
+                                  (fn [[k opts s]]
+                                    (let [k' (or (-> opts ::mts/clj<->js :prop (keyword))
+                                                 (if default-to-camel-case
+                                                   (csk/->camelCase (name k))
+                                                   (name k)))]
+                                      [k' s])))
+                                 (apply array-map))}]
     (if (empty? optional)
       object
       (assoc object :optional optional))))
