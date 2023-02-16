@@ -22,18 +22,8 @@
 
 (defrecord Mapping [key prop schema])
 
-(defn- -clj<>js-mapping
-  ([schema]
-   (let [*defs (atom (transient {}))
-         root  (-clj<>js-mapping schema {::*definitions       *defs
-                                         ::m/walk-schema-refs true
-                                         ::m/walk-refs        true
-                                         ::m/walk-entry-vals  true})]
-     (-> @*defs
-         (assoc! ::root root)
-         (persistent!))))
-
-  ([schema options]
+(defn- walk-schema->clj<>js-mapping
+  ([schema {::keys [prop-name-fn] :as options}]
    (m/walk
     schema
     (fn [schema' path children {::keys [*definitions] :as opts}]
@@ -43,7 +33,7 @@
           , {::ref (m/-ref schema')}
 
           ::m/schema
-          , (let [result (-clj<>js-mapping (m/deref schema') opts)]
+          , (let [result (walk-schema->clj<>js-mapping (m/deref schema') opts)]
               (if-let [ref (m/-ref schema')]
                 (do
                   (swap! *definitions assoc! ref result)
@@ -63,7 +53,7 @@
           , (->> children
                  (reduce
                   (fn [x [k opts s]]
-                    (let [p (-> opts ::mts/clj<->js :prop (or (csk/->camelCaseString k)))
+                    (let [p (-> opts ::mts/clj<->js :prop (or (prop-name-fn k)))
                           m (Mapping. k p (first s))]
                       (assoc! x, k m, p m)))
                   (transient {}))
@@ -80,5 +70,23 @@
             :else
             , children))))
     options)))
+
+(defn- -clj<>js-mapping
+  ([schema]
+   (-clj<>js-mapping schema {}))
+  ([schema {:keys [default-to-camel-case] :as options}]
+   (let [*defs (or (::*definitions options)
+                   (atom (transient {})))
+         options
+         (merge options
+                {::*definitions       *defs
+                 ::prop-name-fn       (if default-to-camel-case csk/->camelCaseString #_else name)
+                 ::m/walk-schema-refs true
+                 ::m/walk-refs        true
+                 ::m/walk-entry-vals  true})
+         root  (walk-schema->clj<>js-mapping schema options)]
+     (-> @*defs
+         (assoc! ::root root)
+         (persistent!)))))
 
 (def clj<->js-mapping (memoize -clj<>js-mapping))

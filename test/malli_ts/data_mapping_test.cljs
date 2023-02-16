@@ -47,7 +47,7 @@
     (m/schema [:schema {:registry {::order-items order-items-schema}}
                order-schema])))
 
-(def mapping (sut/clj<->js-mapping schema))
+(def mapping (sut/clj<->js-mapping schema {:default-to-camel-case true}))
 
 (deftest root-reference
   (let [root (m/schema [:schema {:registry {::root schema}} ::root])
