@@ -79,10 +79,10 @@
    (let [cur (::mts-dm/root mapping)
          cur (if-let [ref (::mts-dm/ref cur)] (mapping ref) #_else cur)]
      (to-js' x mapping cur)))
-  ([x registry schema]
+  ([x registry schema & [mapping-options]]
    (let [s (m/schema [:schema {:registry registry}
                       schema])
-         m (mts-dm/clj<->js-mapping s)]
+         m (mts-dm/clj<->js-mapping s mapping-options)]
      (to-js x m))))
 
 (comment

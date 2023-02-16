@@ -46,10 +46,10 @@
      ;else
        v)))
 
-  ([x registry schema]
+  ([x registry schema & [mapping-options]]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]
-     (to-clj x (mts-dm/clj<->js-mapping s)))))
+     (to-clj x (mts-dm/clj<->js-mapping s mapping-options)))))
 
 (comment
 
