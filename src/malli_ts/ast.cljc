@@ -87,22 +87,16 @@
 (defmethod parse-schema-node ::m/val [_ _ children _] (first children))
 
 (defmethod parse-schema-node :map [_ _ children {:keys [default-to-camel-case] :as options}]
-  (let [get-optional (fn [m] (or (get m :optional) (get m "optional")))
-        optional-xf (comp (filter (m/-comp get-optional second)) (map first))
-        optional (into #{} optional-xf children)
-        object {:type :object
-                :properties (->> children
-                                 (mapcat
-                                  (fn [[k opts s]]
-                                    (let [k' (or (-> opts ::mts/clj<->js :prop (keyword))
-                                                 (if default-to-camel-case
-                                                   (csk/->camelCase (name k))
-                                                   (name k)))]
-                                      [k' s])))
-                                 (apply array-map))}]
-    (if (empty? optional)
-      object
-      (assoc object :optional optional))))
+  {:type :object
+   :properties (->> children
+                    (map
+                     (fn [[k opts s]]
+                       (let [k' (or (-> opts ::mts/clj<->js :prop)
+                                    (if default-to-camel-case
+                                      (csk/->camelCase (name k))
+                                      (name k)))]
+                         [k' [s opts]])))
+                    (into {}))})
 
 (defmethod parse-schema-node :multi [_ _ children _] {:union (mapv last children)})
 

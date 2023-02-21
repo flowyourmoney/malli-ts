@@ -117,7 +117,6 @@
   (str "(" (string/join "&" (map #(-parse-ast-node % options) items)) ")"))
 
 (defmethod -parse-ast-node [:type :object] [{:keys [properties
-                                                    optional
                                                     index-signature]}
                                             options]
   (let [idx-sign-literal (if index-signature
@@ -127,10 +126,10 @@
         properties-literal (if-not (empty? properties)
                              (string/join
                               ","
-                              (map (fn [[k v]]
+                              (map (fn [[k [v opts]]]
                                      (let [property-name (name k)]
                                        (str \" property-name \"
-                                            (if (contains? optional k) "?" nil) ":"
+                                            (if (:optional opts) "?" nil) ":"
                                             (-parse-ast-node v options))))
                                    properties))
                              nil)]
