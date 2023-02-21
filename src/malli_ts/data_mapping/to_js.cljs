@@ -2,22 +2,23 @@
   (:require
    [malli-ts.core          :as-alias mts]
    [malli-ts.data-mapping  :as mts-dm]
-   [malli.core             :as m]))
+   [malli.core             :as m]
+   [cljs-bean.core         :as b]))
 
 (declare to-js')
 
 (defn- get-prop [js->clj-mapping cur-js->clj-mapping this target prop]
-  (case prop
-    (let [mapping (when cur-js->clj-mapping (cur-js->clj-mapping prop))
-          m-prop (if mapping (.-key mapping) #_else (keyword prop))
-          value (get target m-prop ::not-found)]
-      (if (= value ::not-found) value
-        ;else
-          (or (unchecked-get this prop)
-              (let [proxy (to-js' value js->clj-mapping (:schema mapping))]
-              ;; cache proxy as `this[prop]`
-                (unchecked-set this prop proxy)
-                proxy))))))
+  (let [mapping (when cur-js->clj-mapping (cur-js->clj-mapping prop))
+        m-prop (if mapping (.-key mapping) #_else (keyword prop))
+        value (get target m-prop ::not-found)]
+    (if (= value ::not-found)
+      value
+    ;else
+      (or (unchecked-get this prop)
+          (let [proxy (to-js' value js->clj-mapping (:schema mapping))]
+            ;; cache proxy as `this[prop]`
+            (unchecked-set this prop proxy)
+            proxy)))))
 
 (deftype JsProxy [js->clj-mapping cur-js->clj-mapping]
   Object
@@ -25,7 +26,7 @@
     (if cur-js->clj-mapping
       (->> (keys target)
            (map (fn [k] (-> (cur-js->clj-mapping k)
-                            :prop 
+                            :prop
                             (or (if (keyword? k) (name k) #_else (str k))))))
            (apply array))
      ;else
@@ -49,9 +50,10 @@
 (defn- to-js'
   ([x js->clj-mapping cur-js->clj-mapping]
    (cond
-     ;; If the "unwrap/clj" property exists, x is already wrapped
-     ;; Cast to boolean for unwrapped JS truthyness check
-     ^boolean (unchecked-get x "unwrap/clj")
+     (or (nil? x)
+         ;; If the "unwrap/clj" property exists, x is already wrapped
+         ;; Cast to boolean for unwrapped JS truthyness check
+         ^boolean (unchecked-get x "unwrap/clj"))
      , x
 
      (or (sequential? x)
