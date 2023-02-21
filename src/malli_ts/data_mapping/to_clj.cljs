@@ -40,8 +40,12 @@
    (if-some [v (unwrap v)] v 
    ;else
      (if-some [bean' (cond (object? v) true (array? v) false)]
-       (let [bean-context
-             (BeanContext. js<->clj-mapping (::mts-dm/root js<->clj-mapping) nil)]
+       (let [root
+             (::mts-dm/root js<->clj-mapping)
+             root
+             (if-let [ref (::mts-dm/ref root)] (js<->clj-mapping ref) #_else root)
+             bean-context
+             (BeanContext. js<->clj-mapping root nil)]
          (if bean'
            (b/Bean. nil v bean-context true nil nil nil)
            (b/ArrayVector. nil bean-context v nil)))
