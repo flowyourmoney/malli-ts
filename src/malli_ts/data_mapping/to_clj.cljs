@@ -6,20 +6,23 @@
    [cljs-bean.core :as b :refer [bean?]]))
 
 (defn unwrap [v]
-  (or (unchecked-get v "unwrap/clj")
-      (when (bean? v) v)))
+  (when v
+    (or (unchecked-get v "unwrap/clj")
+        (when (bean? v) v))))
 
 (deftype BeanContext [js<->clj-mapping mapping ^:mutable sub-cache]
   b/BeanContext
   (keywords? [_] true)
-  (key->prop [_ key'] (let [s (mapping key')] (set! sub-cache s) (.-prop s)))
-  (prop->key [_ prop] (let [s (mapping prop)] (set! sub-cache s) (.-key s)))
+  (key->prop [_ key']
+    (let [s (get mapping key')] (set! sub-cache s) (if s (.-prop s) (name key'))))
+  (prop->key [_ prop]
+    (let [s (get mapping prop)] (set! sub-cache s) (if s (.-key s) (keyword prop))))
   (transform [_ v prop key' nth']
     (if-some [v (unwrap v)] v
     ;else
       (if-some [bean' (cond (object? v) true (array? v) false)]
         (let [sub-mapping
-              (if nth'
+              (if (or nth' (not sub-cache))
                 mapping
               ;else
                 (let [s (.-schema sub-cache)]
@@ -37,18 +40,22 @@
    (if-some [v (unwrap v)] v 
    ;else
      (if-some [bean' (cond (object? v) true (array? v) false)]
-       (let [bean-context
-             (BeanContext. js<->clj-mapping (::mts-dm/root js<->clj-mapping) nil)]
+       (let [root
+             (::mts-dm/root js<->clj-mapping)
+             root
+             (if-let [ref (::mts-dm/ref root)] (js<->clj-mapping ref) #_else root)
+             bean-context
+             (BeanContext. js<->clj-mapping root nil)]
          (if bean'
            (b/Bean. nil v bean-context true nil nil nil)
            (b/ArrayVector. nil bean-context v nil)))
      ;else
        v)))
 
-  ([x registry schema]
+  ([x registry schema & [mapping-options]]
    (let [s (m/schema [:schema {:registry registry}
                       schema])]
-     (to-clj x (mts-dm/clj<->js-mapping s)))))
+     (to-clj x (mts-dm/clj<->js-mapping s mapping-options)))))
 
 (comment
 

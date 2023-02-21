@@ -117,10 +117,8 @@
   (str "(" (string/join "&" (map #(-parse-ast-node % options) items)) ")"))
 
 (defmethod -parse-ast-node [:type :object] [{:keys [properties
-                                                    optional
                                                     index-signature]}
-                                            {:keys [default-to-camel-case]
-                                             :as options}]
+                                            options]
   (let [idx-sign-literal (if index-signature
                            (str "[k:" (-parse-ast-node (first index-signature) options) "]:"
                                 (-parse-ast-node (second index-signature) options))
@@ -128,12 +126,10 @@
         properties-literal (if-not (empty? properties)
                              (string/join
                               ","
-                              (map (fn [[k v]]
-                                     (let [property-name (if default-to-camel-case
-                                                           (csk/->camelCase (name k))
-                                                           (name k))]
+                              (map (fn [[k [v opts]]]
+                                     (let [property-name (name k)]
                                        (str \" property-name \"
-                                            (if (contains? optional k) "?" nil) ":"
+                                            (if (:optional opts) "?" nil) ":"
                                             (-parse-ast-node v options))))
                                    properties))
                              nil)]

@@ -2,31 +2,62 @@
   (:require
    [malli-ts.core          :as-alias mts]
    [malli-ts.data-mapping  :as mts-dm]
-   [malli.core             :as m]))
+   [malli.core             :as m]
+   [cljs-bean.core         :as b]))
 
 (declare to-js')
 
+(defn- get-prop [js->clj-mapping cur-js->clj-mapping this target prop]
+  (let [mapping (when cur-js->clj-mapping (cur-js->clj-mapping prop))
+        m-prop (if mapping (.-key mapping) #_else (keyword prop))
+        value (get target m-prop ::not-found)]
+    (if (= value ::not-found)
+      value
+    ;else
+      (or (unchecked-get this prop)
+          (let [proxy (to-js' value js->clj-mapping (:schema mapping))]
+            ;; cache proxy as `this[prop]`
+            (unchecked-set this prop proxy)
+            proxy)))))
+
 (deftype JsProxy [js->clj-mapping cur-js->clj-mapping]
   Object
+  (ownKeys [this target]
+    (if cur-js->clj-mapping
+      (->> (keys target)
+           (map (fn [k] (-> (cur-js->clj-mapping k)
+                            :prop
+                            (or (if (keyword? k) (name k) #_else (str k))))))
+           (apply array))
+     ;else
+      (apply array (map #(if (keyword? %) (name %) #_else (str %)) (keys target)))))
+  (getOwnPropertyDescriptor [this target prop]
+    (let [v (get-prop js->clj-mapping cur-js->clj-mapping this target prop)]
+      (if (= v ::not-found)
+        #js {:value nil, :writable false, :enumerable false, :configurable true}
+       ;else
+        #js {:value v, :writable false, :enumerable true, :configurable true})))
   (get [this target prop]
     (case prop
       "unwrap/clj" target
       (or (unchecked-get this prop)
-          (when-let [mapping (cur-js->clj-mapping prop)]
-            (let [proxy (to-js' (target (.-key mapping)) js->clj-mapping (.-schema mapping))]
-              ;; cache proxy as `this[prop]`
-              (unchecked-set this prop proxy)
-              proxy)))))
+          (let [v (get-prop js->clj-mapping cur-js->clj-mapping this target prop)]
+            (if (= v ::not-found) nil #_else v)))))
   (getPrototypeOf [this]
-    (.-prototype this)))
+    ; Javascript requires object or explicit null value and will crash on undefined:
+    (or (.-prototype this) (.-prototype js/Object))))
 
 (defn- to-js'
   ([x js->clj-mapping cur-js->clj-mapping]
    (cond
-     ;; If the "unwrap/clj" property exists, x is already wrapped
-     ;; Cast to boolean for unwrapped JS truthyness check
-     ^boolean (unchecked-get x "unwrap/clj")
+     (or (nil? x)
+         ;; If the "unwrap/clj" property exists, x is already wrapped
+         ;; Cast to boolean for unwrapped JS truthyness check
+         ^boolean (unchecked-get x "unwrap/clj"))
      , x
+
+     (b/bean? x)
+     , (b/->js x)
 
      (or (sequential? x)
          (set? x))
@@ -40,21 +71,24 @@
              arr)))
 
      (associative? x)
-     , (let [cur-js->clj-mapping
+     , (let [nested-mapping
              (if-let [ref (::mts-dm/ref cur-js->clj-mapping)] (js->clj-mapping ref)
               #_else cur-js->clj-mapping)]
-         (js/Proxy. x (JsProxy. js->clj-mapping cur-js->clj-mapping)))
+         (js/Proxy. x (JsProxy. js->clj-mapping (when (map? nested-mapping) nested-mapping))))
 
      :else
      , x)))
 
 (defn ^:export to-js
   ([x mapping]
-   (to-js' x mapping (::mts-dm/root mapping)))
-  ([x registry schema]
+   (let [cur (::mts-dm/root mapping)
+         cur (if-let [ref (::mts-dm/ref cur)] (mapping ref) #_else cur)]
+     (to-js' x mapping cur)))
+  ([x registry schema & [mapping-options]]
    (let [s (m/schema [:schema {:registry registry}
-                      schema])]
-     (to-js x (mts-dm/clj<->js-mapping s)))))
+                      schema])
+         m (mts-dm/clj<->js-mapping s mapping-options)]
+     (to-js x m))))
 
 (comment
   (let [order-items-schema [:vector [:map
