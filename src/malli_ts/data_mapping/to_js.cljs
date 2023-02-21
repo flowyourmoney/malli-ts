@@ -56,6 +56,9 @@
          ^boolean (unchecked-get x "unwrap/clj"))
      , x
 
+     (b/bean? x)
+     , (b/->js x)
+
      (or (sequential? x)
          (set? x))
      , (let [len (count x)
