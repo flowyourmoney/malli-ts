@@ -93,8 +93,11 @@
                  ::m/walk-refs        true
                  ::m/walk-entry-vals  true})
          root  (walk-schema->clj<>js-mapping schema options)]
-     (-> @*defs
-         (assoc! ::root root)
-         (persistent!)))))
+     (as-> @*defs mapping
+       (assoc! mapping ::root root)
+       (persistent! mapping)
+       ;; Follow mapping ::refs to their final value:
+       (update-vals mapping
+                    #(loop [v %] (if-let [v' (::ref v)] (recur (mapping v')) #_else v)))))))
 
 (def clj<->js-mapping (memoize -clj<>js-mapping))
