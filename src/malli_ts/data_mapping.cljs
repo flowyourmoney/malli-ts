@@ -43,11 +43,19 @@
           (:schema :set :sequential :vector)
           , (first children)
 
-          (:enum :or)
+          :enum
           , (m/form schema')
 
           :map-of
           , (second children)
+
+          :or
+          , (let [merged (->> children
+                              (reduce
+                               (fn [a b] (if (map? a) (if (map? b) (merge a b) #_else a)
+                                             #_else b))))]
+              ;; Either the children-mappings merged into a single map, or the first child
+              merged)
 
           :map
           , (->> children
