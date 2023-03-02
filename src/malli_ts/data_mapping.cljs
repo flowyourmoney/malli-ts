@@ -43,11 +43,19 @@
           (:schema :set :sequential :vector)
           , (first children)
 
-          (:enum :or)
+          :enum
           , (m/form schema')
 
           :map-of
           , (second children)
+
+          :or
+          , (let [merged (->> children
+                              (reduce
+                               (fn [a b] (if (map? a) (if (map? b) (merge a b) #_else a)
+                                             #_else b))))]
+              ;; Either the children-mappings merged into a single map, or the first child
+              merged)
 
           :map
           , (->> children
@@ -85,8 +93,11 @@
                  ::m/walk-refs        true
                  ::m/walk-entry-vals  true})
          root  (walk-schema->clj<>js-mapping schema options)]
-     (-> @*defs
-         (assoc! ::root root)
-         (persistent!)))))
+     (as-> @*defs mapping
+       (assoc! mapping ::root root)
+       (persistent! mapping)
+       ;; Follow mapping ::refs to their final value:
+       (update-vals mapping
+                    #(loop [v %] (if-let [v' (::ref v)] (recur (mapping v')) #_else v)))))))
 
 (def clj<->js-mapping (memoize -clj<>js-mapping))
