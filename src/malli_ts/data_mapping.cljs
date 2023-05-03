@@ -22,6 +22,11 @@
 
 (defrecord Mapping [key prop schema])
 
+(defn- deref-schema [schema defs]
+  (if-let [ref (::ref schema)]
+    (-> defs ref (deref-schema defs))
+    schema))
+
 (defn- walk-schema->clj<>js-mapping
   ([schema {::keys [prop-name-fn] :as options}]
    (m/walk
@@ -32,7 +37,7 @@
           :ref
           , {::ref (m/-ref schema')}
 
-          ::m/schema
+          (::m/schema :union :merge :select-keys)
           , (let [result (walk-schema->clj<>js-mapping (m/deref schema') opts)]
               (if-let [ref (m/-ref schema')]
                 (do
@@ -52,8 +57,11 @@
           :or
           , (let [merged (->> children
                               (reduce
-                               (fn [a b] (if (map? a) (if (map? b) (merge a b) #_else a)
-                                             #_else b))))]
+                               (fn [a b]
+                                 (let [a (deref-schema a @*definitions)
+                                       b (deref-schema b @*definitions)]
+                                   (if (map? a) (if (map? b) (merge a b) #_else a)
+                                       #_else b)))))]
               ;; Either the children-mappings merged into a single map, or the first child
               merged)
 
