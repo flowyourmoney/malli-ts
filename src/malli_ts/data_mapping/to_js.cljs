@@ -9,7 +9,8 @@
 
 (defn- get-prop [js->clj-mapping cur-js->clj-mapping this target prop]
   (let [mapping (when cur-js->clj-mapping (cur-js->clj-mapping prop))
-        m-prop (if mapping (.-key mapping) #_else (keyword prop))
+        ; When mapping :key is nil, the schema is for a :map-of and we lookup the given prop
+        m-prop (if mapping (or (.-key mapping) prop) #_else (keyword prop))
         value (get target m-prop ::not-found)]
     (if (= value ::not-found)
       value

@@ -52,7 +52,7 @@
           , (m/form schema')
 
           :map-of
-          , (second children)
+          , (Mapping. nil nil (second children))
 
           :or
           , (let [merged (->> children

@@ -14,9 +14,15 @@
   b/BeanContext
   (keywords? [_] true)
   (key->prop [_ key']
-    (let [s (get mapping key')] (set! sub-cache s) (if s (.-prop s) (name key'))))
+    ; When prop is nil, the schema is for a :map-of and we return the given key as is.
+    ; If there is a schema, we return the prop from the schema
+    ; or if there is no schema, we return the name of the given key'
+    (let [s (get mapping key')] (set! sub-cache s) (if-let [p (some-> s .-prop)] p (name key'))))
   (prop->key [_ prop]
-    (let [s (get mapping prop)] (set! sub-cache s) (if s (.-key s) (keyword prop))))
+    ; When key is nil, the schema is for a :map-of and we return the given prop as is.
+    ; If there is a schema, we return the key from the schema
+    ; or if there is no schema, we keywordize the given prop
+    (let [s (get mapping prop)] (set! sub-cache s) (if s (or (.-key s) prop) (keyword prop))))
   (transform [_ v prop key' nth']
     (if-some [v (unwrap v)] v
     ;else
